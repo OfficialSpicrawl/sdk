@@ -1,0 +1,94 @@
+# Publishes the TypeScript SDK to npm as @spicrawl/sdk.
+#
+# Auth is the NPM_TOKEN repository secret: an npm granular access token for
+# the spicrawl account with "Read and write (publish and stage)" on @spicrawl
+# packages and "Bypass two-factor authentication". Write tokens expire (90
+# days at most), so rotate the secret before then. npm ends direct token
+# publishing in January 2027; switch to trusted publishing (OIDC) before then.
+#
+# The repo is public, so each release carries a provenance attestation. The
+# attestation needs package.json "repository" to match this GitHub repo.
+#
+# Release: bump "version" in package.json AND src/version.ts (a test keeps
+# them equal), then merge to main. The CI publishes that version if npm does
+# not have it yet, and otherwise only runs the checks. A prerelease version
+# (e.g. 0.2.0-beta.1) is published under the `next` dist-tag so `npm install
+# @spicrawl/sdk` keeps getting latest.
+#
+# openapi.yaml is a copy of https://docs.spicrawl.com/openapi.yaml. It is
+# checked in so that CI can generate types without external dependencies.
+# src/generated/ is generated from openapi.yaml with `npm run generate`.
+# CI fails when openapi.yaml and src/generated/ disagree.
+#
+# Triggers: `push` to main, `pull_request`, and `workflow_dispatch`. Every
+# step through "already on npm?" runs on all triggers. The publish step runs
+# only when the version is new, the event is a push to main (not a PR), and
+# this is the main branch.
+
+name: release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  npm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+          registry-url: https://registry.npmjs.org
+      - name: install
+        run: npm ci --no-audit --no-fund
+      # openapi.yaml is a copy of https://docs.spicrawl.com/openapi.yaml. The
+      # generated types must agree; a stale copy would ship types that disagree
+      # with the API.
+      - name: generated types are current
+        run: |
+          npm run generate
+          git diff --exit-code -- src/generated/
+      - name: typecheck
+        run: npm run typecheck
+      - name: test
+        run: npm test
+      - name: build
+        run: npm run build
+      - name: already on npm?
+        id: check
+        run: |
+          name="$(node -p 'require("./package.json").name')"
+          version="$(node -p 'require("./package.json").version')"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already published; nothing to do."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+          tag=latest
+          case "$version" in *-*) tag=next ;; esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: publish
+        if: steps.check.outputs.publish == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::the NPM_TOKEN repository secret is not set"
+            exit 1
+          fi
+          npm publish --provenance --access public --tag "${{ steps.check.outputs.tag }}"

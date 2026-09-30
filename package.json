@@ -1,0 +1,80 @@
+{
+  "name": "@spicrawl/sdk",
+  "version": "0.1.1",
+  "description": "Official TypeScript SDK for the Spicrawl web scraping API: scrape any URL to LLM-ready Markdown or structured JSON, batch crawl and extract data.",
+  "license": "Apache-2.0",
+  "author": "Spicrawl",
+  "homepage": "https://docs.spicrawl.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Spicrawl/sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Spicrawl/sdk/issues"
+  },
+  "keywords": [
+    "spicrawl",
+    "web-scraping",
+    "web-scraping-api",
+    "scraping-api",
+    "scraper-api",
+    "scraper",
+    "crawler",
+    "web-crawler",
+    "sdk",
+    "typescript",
+    "nodejs",
+    "markdown",
+    "html-to-markdown",
+    "llm",
+    "llm-ready",
+    "rag",
+    "ai-agents",
+    "data-extraction",
+    "structured-data",
+    "javascript-rendering",
+    "headless-browser",
+    "mcp"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "generate": "openapi-typescript openapi.yaml --default-non-nullable false --empty-objects-unknown -o src/generated/openapi.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "openapi-typescript": "^7.13.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}
