@@ -1,19 +1,20 @@
 # Spicrawl SDK: Web Scraping API for Node.js & TypeScript
 
-Spicrawl is a web scraping API that turns any URL into clean Markdown, HTML or structured JSON for LLMs, RAG pipelines and AI agents. `@spicrawl/sdk` is the official TypeScript client for scraping pages, batch-crawling lists of URLs and extracting structured data, with full type definitions and zero dependencies.
+Official TypeScript SDK for Spicrawl, the web scraping API for AI agents and LLMs: scrape any URL to clean Markdown, HTML or JSON, with JavaScript rendering, structured data extraction, screenshots and batch jobs. `@spicrawl/sdk` has full type definitions, ESM and CommonJS builds, and zero dependencies.
 
 [![npm version](https://img.shields.io/npm/v/@spicrawl/sdk.svg)](https://www.npmjs.com/package/@spicrawl/sdk)
 [![npm downloads](https://img.shields.io/npm/dm/@spicrawl/sdk.svg)](https://www.npmjs.com/package/@spicrawl/sdk)
 [![types](https://img.shields.io/npm/types/@spicrawl/sdk.svg)](https://www.npmjs.com/package/@spicrawl/sdk)
 [![license](https://img.shields.io/npm/l/@spicrawl/sdk.svg)](https://www.npmjs.com/package/@spicrawl/sdk)
-[![node](https://img.shields.io/node/v/@spicrawl/sdk.svg)](https://www.npmjs.com/package/@spicrawl/sdk)
+[![CI](https://github.com/Spicrawl/sdk/actions/workflows/release.yml/badge.svg)](https://github.com/Spicrawl/sdk/actions/workflows/release.yml)
+[![GitHub stars](https://img.shields.io/github/stars/Spicrawl/sdk?style=social)](https://github.com/Spicrawl/sdk)
 [![docs](https://img.shields.io/badge/docs-docs.spicrawl.com-blue.svg)](https://docs.spicrawl.com)
 
-**Docs:** <https://docs.spicrawl.com> · **CLI:** [`@spicrawl/cli`](https://www.npmjs.com/package/@spicrawl/cli) · **MCP server for AI agents:** <https://docs.spicrawl.com/agents/mcp>
+**[Docs](https://docs.spicrawl.com)** · **[Get an API key](https://app.spicrawl.com/signup)** · **[GitHub](https://github.com/Spicrawl/sdk)** · **[CLI](https://github.com/Spicrawl/cli)** · **[MCP server for AI agents](https://docs.spicrawl.com/agents/mcp)** · **[Changelog](https://github.com/Spicrawl/sdk/blob/main/CHANGELOG.md)**
 
 ## What is Spicrawl?
 
-Spicrawl is a web data API: you send it a URL and it returns the page as HTML, Markdown, plain text, PDF or a JSON envelope with extracted fields. It can render JavaScript in a headless browser, extract data with CSS selectors, XPath, page metadata or AI, and process lists of up to 10,000 URLs as one batch job. This SDK wraps that HTTP API for Node.js 18+, with ESM and CommonJS builds and TypeScript types generated from the OpenAPI spec.
+Spicrawl is a web data API: you send it a URL and it returns the page as HTML, Markdown, plain text, PDF or a JSON envelope with extracted fields. It can render JavaScript in a headless browser, extract data with CSS selectors, XPath, a JSON Schema or page metadata, and process lists of up to 10,000 URLs as one batch job. This SDK wraps that HTTP API for Node.js 18+, with ESM and CommonJS builds and TypeScript types generated from the OpenAPI spec.
 
 ## Install
 
@@ -22,7 +23,7 @@ npm install @spicrawl/sdk
 # or: pnpm add @spicrawl/sdk / yarn add @spicrawl/sdk / bun add @spicrawl/sdk
 ```
 
-Requires Node.js 18 or later. Create an API key in your Spicrawl dashboard (keys start with `spicrawl_live_` or `spicrawl_test_`) and export it:
+Requires Node.js 18 or later. [Create an API key](https://app.spicrawl.com/signup) in the Spicrawl dashboard (keys start with `spicrawl_live_` or `spicrawl_test_`) and export it:
 
 ```sh
 export SPICRAWL_API_KEY=spicrawl_live_...
@@ -38,6 +39,10 @@ const spicrawl = new Spicrawl(); // reads SPICRAWL_API_KEY
 const page = await spicrawl.scrape({ url: "https://example.com" });
 console.log(page.status);  // the target site's HTTP status, e.g. 200
 console.log(page.content); // the page HTML
+
+// The same page as LLM-ready Markdown
+const md = await spicrawl.scrapeRaw({ url: "https://example.com", response_format: "markdown" });
+if (md.format === "markdown") console.log(md.body);
 ```
 
 The client class is named `Spicrawl` and talks to Spicrawl's API at `https://api.spicrawl.com`.
@@ -47,13 +52,14 @@ The client class is named `Spicrawl` and talks to Spicrawl's API at `https://api
 - **Scrape any web page** from Node.js with one call, returning HTML, Markdown, plain text, PDF or a JSON envelope.
 - **Render JavaScript-heavy sites** (React, Vue, SPAs) in a headless browser, and wait for a CSS selector before capture.
 - **Convert HTML to Markdown for LLMs**, RAG and AI agents, with main-content isolation that drops navigation and boilerplate.
-- **Extract structured data as JSON** using CSS selectors, XPath, a JSON Schema, page metadata (JSON-LD, OpenGraph) or AI extraction from a plain-language prompt.
+- **Extract structured data as JSON** using CSS selectors, XPath, a typed JSON Schema, or page metadata (JSON-LD, OpenGraph). AI extraction from a plain-language prompt is coming soon.
 - **Take screenshots** of a full page or a single element, and print pages to PDF.
-- **Batch crawl a list of URLs** (up to 10,000 per job) asynchronously, then stream the results as JSON Lines.
+- **Batch scrape a list of URLs** (up to 10,000 per job) asynchronously, then stream the results as JSON Lines.
 - **Collect every link on a page** with `links: true`, to feed your own crawl queue.
 - **Keep sessions and cookies** across requests, so you can log in once and reuse the login.
 - **Bring your own proxy** (HTTP, HTTPS or SOCKS5) on any request.
 - **Track credits, rate limits and request traces** from typed response metadata.
+- **Give AI agents web access**: use the SDK as a tool in your own agent, or connect Claude Code, Cursor, Codex and VS Code to Spicrawl's hosted MCP server.
 
 ## Contents
 
@@ -64,6 +70,7 @@ The client class is named `Spicrawl` and talks to Spicrawl's API at `https://api
 - [Batch scrape many URLs](#batch-scrape-many-urls)
 - [Sessions and cookies](#sessions-and-cookies)
 - [Use your own proxy](#use-your-own-proxy)
+- [Use with AI agents](#use-with-ai-agents)
 - [Beta limitations](#beta-limitations)
 - [Pagination](#pagination)
 - [Error handling](#error-handling)
@@ -74,6 +81,7 @@ The client class is named `Spicrawl` and talks to Spicrawl's API at `https://api
 - [Client options](#client-options)
 - [TypeScript types](#typescript-types)
 - [CommonJS](#commonjs)
+- [Examples](#examples)
 - [FAQ](#faq)
 - [Related](#related)
 
@@ -130,6 +138,25 @@ console.log(product.data);         // { title: "...", price: "..." }
 console.log(product.empty_fields); // selectors that matched nothing
 ```
 
+### With a JSON Schema (typed, validated output)
+
+Give each property a `selector`. Values are coerced to the declared types and validated:
+
+```ts
+const typed = await spicrawl.scrape({
+  url: "https://example.com/product/1",
+  extract: {
+    type: "object",
+    properties: {
+      title: { type: "string", selector: "h1" },
+      price: { type: "number", selector: ".price" },
+    },
+    required: ["title"],
+  },
+});
+console.log(typed.data); // { title: "...", price: 19.99 }
+```
+
 ### From page metadata (JSON-LD, OpenGraph, microdata)
 
 ```ts
@@ -137,9 +164,9 @@ const meta = await spicrawl.scrape({ url: "https://example.com/article", autopar
 console.log(meta.data);
 ```
 
-### With AI extraction
+### With AI extraction (coming soon)
 
-Describe what you want in plain language, optionally with a JSON Schema for the output:
+AI extraction is not live yet. It will take a plain-language prompt, optionally with a JSON Schema for the output. The SDK already types `ai_extract`, so this code won't change when it launches ([guide](https://docs.spicrawl.com/guides/ai-extraction)):
 
 ```ts
 const ai = await spicrawl.scrape({
@@ -242,13 +269,38 @@ await spicrawl.scrape({
 });
 ```
 
+## Use with AI agents
+
+**Give your own agent a web tool.** Wrap one SDK call as a tool function; the Markdown it returns is ready for a prompt. This works with any framework that takes a function, such as the Vercel AI SDK, LangChain.js, the OpenAI Agents SDK or Mastra:
+
+```ts
+import { Spicrawl } from "@spicrawl/sdk";
+
+const spicrawl = new Spicrawl();
+
+/** Tool: fetch a web page as clean Markdown for the model. */
+export async function fetchPage(url: string): Promise<string> {
+  const page = await spicrawl.scrapeRaw({ url, response_format: "markdown", main_content_only: true });
+  return page.format === "markdown" ? page.body : "";
+}
+```
+
+**Connect a coding agent without writing code.** Spicrawl runs a hosted MCP server at `https://mcp.spicrawl.com/mcp`. The [Spicrawl CLI](https://github.com/Spicrawl/cli) sets up Claude Code, Cursor, VS Code and Codex with it, plus the Spicrawl agent skill, in one command:
+
+```sh
+npx @spicrawl/cli init
+```
+
+See the [MCP guide](https://docs.spicrawl.com/agents/mcp), the [agent skill](https://docs.spicrawl.com/agents/skill) and [llms.txt](https://docs.spicrawl.com/llms.txt), the docs index written for agents.
+
 ## Beta limitations
 
 Spicrawl is in beta. What that means today:
 
 - **Proxies:** bring your own with `proxy`. Managed proxy pools (`premium_proxy`, `proxy_country`) are coming soon.
 - **Remote browser:** the remote CDP browser (`spicrawl.browser.token()` / `connectURL()`) is coming soon. The methods exist so your code won't change when it launches.
-- **Crawling:** there is no whole-site crawl or sitemap endpoint. Batch-crawl a list of URLs you supply, and collect links from a page with `links: true`.
+- **AI extraction:** `ai_extract` is coming soon. Use `extract` with CSS/XPath selectors or a JSON Schema today.
+- **Crawling:** there is no whole-site crawl or sitemap endpoint. Batch-scrape a list of URLs you supply, and collect links from a page with `links: true`.
 
 ## Pagination
 
@@ -384,6 +436,14 @@ import type { ScrapeRequest, ScrapeEnvelope, BatchJob, ErrorCode } from "@spicra
 const { Spicrawl } = require("@spicrawl/sdk");
 ```
 
+## Examples
+
+Runnable scripts in [`examples/`](https://github.com/Spicrawl/sdk/tree/main/examples) (run with `npx tsx`):
+
+- [scrape-to-markdown.ts](https://github.com/Spicrawl/sdk/blob/main/examples/scrape-to-markdown.ts): convert a web page to Markdown for an LLM.
+- [extract-product.ts](https://github.com/Spicrawl/sdk/blob/main/examples/extract-product.ts): render a JavaScript page and extract fields with CSS selectors.
+- [batch-crawl.ts](https://github.com/Spicrawl/sdk/blob/main/examples/batch-crawl.ts): submit a batch, wait for it, then stream the results.
+
 ## FAQ
 
 ### How do I scrape a website in Node.js?
@@ -404,7 +464,7 @@ Yes. Set `js_render: true` to render the page in a headless browser, and `wait_f
 
 ### How do I extract structured JSON from a web page?
 
-Pass `extract` with a map of field names to CSS selectors, `autoparse: true` for JSON-LD and OpenGraph metadata, or `ai_extract` with a prompt. The result is in `data`.
+Pass `extract` with a map of field names to CSS selectors, or a JSON Schema whose properties carry a `selector` for typed output; or pass `autoparse: true` for JSON-LD and OpenGraph metadata. The result is in `data`. AI extraction from a prompt (`ai_extract`) is coming soon.
 
 ### How do I scrape thousands of URLs?
 
@@ -430,16 +490,27 @@ The SDK is built on the standard `fetch`, `AbortController`, `Headers` and `Resp
 
 A Python SDK is in progress. Until it ships, you can call the HTTP API directly (see the [docs](https://docs.spicrawl.com)) or use the [`spicrawl` CLI](https://docs.spicrawl.com/cli/overview).
 
+### Is the Spicrawl SDK open source?
+
+Yes. `@spicrawl/sdk` is Apache-2.0 and developed in the open at [github.com/Spicrawl/sdk](https://github.com/Spicrawl/sdk); issues and pull requests are welcome. The Spicrawl API it calls is a hosted service.
+
+### Should I use the SDK, the CLI or the MCP server?
+
+Use the SDK from Node.js or TypeScript code, the [CLI](https://github.com/Spicrawl/cli) from a terminal, shell script or CI job, and the [MCP server](https://docs.spicrawl.com/agents/mcp) when an AI agent should call Spicrawl itself.
+
 ### Why didn't my scrape throw when the site returned 404?
 
 The site's status is data, not an error: read it from `status` in the envelope, `targetStatus` in raw mode, or `_meta.targetStatus`. The SDK only throws when the platform itself fails.
 
 ## Related
 
-- **CLI:** [`@spicrawl/cli`](https://www.npmjs.com/package/@spicrawl/cli) provides the `spicrawl` command for scraping from your terminal. [CLI docs](https://docs.spicrawl.com/cli/overview)
+- **Source code:** [github.com/Spicrawl/sdk](https://github.com/Spicrawl/sdk). Report bugs and request features in [issues](https://github.com/Spicrawl/sdk/issues).
+- **CLI:** [`@spicrawl/cli`](https://www.npmjs.com/package/@spicrawl/cli) ([GitHub](https://github.com/Spicrawl/cli)) provides the `spicrawl` command for scraping from your terminal, and sets up AI agents with `spicrawl init`. [CLI docs](https://docs.spicrawl.com/cli/overview)
 - **MCP server:** give Claude, Cursor and other AI agents web scraping tools. [MCP docs](https://docs.spicrawl.com/agents/mcp)
-- **Documentation and API reference:** <https://docs.spicrawl.com>
+- **Agent skill:** teach a coding agent the Spicrawl API. [Skill docs](https://docs.spicrawl.com/agents/skill)
+- **Documentation:** <https://docs.spicrawl.com>, with [llms.txt](https://docs.spicrawl.com/llms.txt) for AI agents
+- **Dashboard and API keys:** <https://app.spicrawl.com>
 
 ## License
 
-Apache-2.0
+[Apache-2.0](https://github.com/Spicrawl/sdk/blob/main/LICENSE)
