@@ -3,6 +3,12 @@
 All notable changes to `@spicrawl/sdk` are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- README rewritten: one section per public method with snippets that typecheck against the SDK, the error classes and the retry and timeout rules as implemented, a runtime table, Anthropic and OpenAI tool-calling examples, "SDK vs CLI vs MCP vs REST" guidance and an FAQ.
+- **Docs fix:** the README said cache hits cost 0 credits. A cache hit is billed at the price of the fetch that stored it, as the API documents.
+- Package description, keywords and homepage updated. No code change.
+
 ## 0.1.2 — 2026-09-30
 
 - The source is public at https://github.com/Spicrawl/sdk, and the npm page links it (`repository`, `bugs`). Releases are published from that repo's CI with an npm provenance attestation.
