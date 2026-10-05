@@ -1,6 +1,6 @@
 {
   "name": "@spicrawl/sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The Spicrawl TypeScript SDK (@spicrawl/sdk) is the official Node.js client for the Spicrawl web scraping API: it turns any URL into clean Markdown, HTML, JSON, a screenshot or a PDF, with JavaScript rendering, structured data extraction and batch jobs, for developers building AI agents, RAG pipelines and LLM apps.",
   "license": "Apache-2.0",
   "author": "Spicrawl",
