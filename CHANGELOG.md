@@ -11,7 +11,7 @@ All notable changes to `@spicrawl/sdk` are documented here. This project follows
 
 ## 0.1.2 — 2026-09-30
 
-- The source is public at https://github.com/Spicrawl/sdk, and the npm page links it (`repository`, `bugs`). Releases are published from that repo's CI with an npm provenance attestation.
+- The source is public at https://github.com/OfficialSpicrawl/sdk, and the npm page links it (`repository`, `bugs`). Releases are published from that repo's CI with an npm provenance attestation.
 - `_meta.creditsRemaining`: the `X-Credits-Remaining` header, your organization's monthly allowance left after the call (after the hold, on a batch submit, append or retry), in whole credits. `null` when the organization has no monthly limit or the API did not send it.
 - The docs moved to the root of their own host: https://docs.spicrawl.com/… (no `/docs` segment). The README and package page link there; old `https://docs.spicrawl.com/docs/…` links redirect. No code change: `SpicrawlError.docUrl` is whatever the API sends.
 - README: repo, API-key and changelog links; a "Use with AI agents" section; a typed JSON Schema extraction example; the runnable examples linked. AI extraction (`ai_extract`) is marked coming soon, as it is in the API docs.

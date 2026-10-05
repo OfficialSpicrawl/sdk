@@ -7,10 +7,10 @@
   "homepage": "https://docs.spicrawl.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Spicrawl/sdk.git"
+    "url": "git+https://github.com/OfficialSpicrawl/sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/Spicrawl/sdk/issues"
+    "url": "https://github.com/OfficialSpicrawl/sdk/issues"
   },
   "keywords": [
     "spicrawl",

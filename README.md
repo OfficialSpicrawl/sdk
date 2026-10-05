@@ -4,10 +4,10 @@ The Spicrawl TypeScript SDK (`@spicrawl/sdk`) is the official Node.js client for
 
 [![npm version](https://img.shields.io/npm/v/@spicrawl/sdk.svg)](https://www.npmjs.com/package/@spicrawl/sdk)
 [![npm downloads](https://img.shields.io/npm/dm/@spicrawl/sdk.svg)](https://www.npmjs.com/package/@spicrawl/sdk)
-[![license](https://img.shields.io/npm/l/@spicrawl/sdk.svg)](https://github.com/Spicrawl/sdk/blob/main/LICENSE)
-[![CI](https://github.com/Spicrawl/sdk/actions/workflows/release.yml/badge.svg)](https://github.com/Spicrawl/sdk/actions/workflows/release.yml)
+[![license](https://img.shields.io/npm/l/@spicrawl/sdk.svg)](https://github.com/OfficialSpicrawl/sdk/blob/main/LICENSE)
+[![CI](https://github.com/OfficialSpicrawl/sdk/actions/workflows/release.yml/badge.svg)](https://github.com/OfficialSpicrawl/sdk/actions/workflows/release.yml)
 
-**[Docs](https://docs.spicrawl.com)** · **[Get an API key](https://app.spicrawl.com/signup)** · **[CLI](https://github.com/Spicrawl/cli)** · **[MCP server](https://docs.spicrawl.com/agents/mcp)** · **[Agent plugins](https://github.com/Spicrawl/agent-plugins)** · **[Changelog](https://github.com/Spicrawl/sdk/blob/main/CHANGELOG.md)**
+**[Docs](https://docs.spicrawl.com)** · **[Get an API key](https://app.spicrawl.com/signup)** · **[CLI](https://github.com/OfficialSpicrawl/cli)** · **[MCP server](https://docs.spicrawl.com/agents/mcp)** · **[Agent plugins](https://github.com/OfficialSpicrawl/agent-plugins)** · **[Changelog](https://github.com/OfficialSpicrawl/sdk/blob/main/CHANGELOG.md)**
 
 ## Install
 
@@ -390,8 +390,8 @@ for (const call of completion.choices[0].message.tool_calls ?? []) {
 ## SDK vs CLI vs MCP vs REST API
 
 - **If you write Node.js or TypeScript code**, use this SDK: typed requests and errors, pagination, batch helpers and billing-safe retries.
-- **If you work in a terminal, a shell script or CI**, use the [Spicrawl CLI](https://github.com/Spicrawl/cli) (`npm install -g @spicrawl/cli`).
-- **If an AI agent (Claude Code, Cursor, Codex, VS Code) should decide what to fetch**, connect it to the hosted MCP server at `https://mcp.spicrawl.com/mcp` with `Authorization: Bearer <API key>`. See the [MCP guide](https://docs.spicrawl.com/agents/mcp), [`@spicrawl/mcp`](https://github.com/Spicrawl/mcp) and [Spicrawl/agent-plugins](https://github.com/Spicrawl/agent-plugins).
+- **If you work in a terminal, a shell script or CI**, use the [Spicrawl CLI](https://github.com/OfficialSpicrawl/cli) (`npm install -g @spicrawl/cli`).
+- **If an AI agent (Claude Code, Cursor, Codex, VS Code) should decide what to fetch**, connect it to the hosted MCP server at `https://mcp.spicrawl.com/mcp` with `Authorization: Bearer <API key>`. See the [MCP guide](https://docs.spicrawl.com/agents/mcp), [`@spicrawl/mcp`](https://github.com/OfficialSpicrawl/mcp) and [OfficialSpicrawl/agent-plugins](https://github.com/OfficialSpicrawl/agent-plugins).
 - **If you use another language**, call the REST API directly. See the [API reference](https://docs.spicrawl.com/api-reference/introduction).
 
 ## FAQ
@@ -430,15 +430,15 @@ Yes, at `https://mcp.spicrawl.com/mcp`, authenticated with `Authorization: Beare
 
 ### Is the SDK open source?
 
-Yes, under Apache-2.0 at [github.com/Spicrawl/sdk](https://github.com/Spicrawl/sdk). The Spicrawl API it calls is a hosted service.
+Yes, under Apache-2.0 at [github.com/OfficialSpicrawl/sdk](https://github.com/OfficialSpicrawl/sdk). The Spicrawl API it calls is a hosted service.
 
 ## Links
 
 - Documentation: <https://docs.spicrawl.com>, with [llms.txt](https://docs.spicrawl.com/llms.txt) for AI agents
 - Dashboard and API keys: <https://app.spicrawl.com>
-- Runnable examples: [scrape-to-markdown.ts](https://github.com/Spicrawl/sdk/blob/main/examples/scrape-to-markdown.ts), [extract-product.ts](https://github.com/Spicrawl/sdk/blob/main/examples/extract-product.ts), [batch-crawl.ts](https://github.com/Spicrawl/sdk/blob/main/examples/batch-crawl.ts)
-- Bugs and feature requests: <https://github.com/Spicrawl/sdk/issues>
+- Runnable examples: [scrape-to-markdown.ts](https://github.com/OfficialSpicrawl/sdk/blob/main/examples/scrape-to-markdown.ts), [extract-product.ts](https://github.com/OfficialSpicrawl/sdk/blob/main/examples/extract-product.ts), [batch-crawl.ts](https://github.com/OfficialSpicrawl/sdk/blob/main/examples/batch-crawl.ts)
+- Bugs and feature requests: <https://github.com/OfficialSpicrawl/sdk/issues>
 
 ## License
 
-[Apache-2.0](https://github.com/Spicrawl/sdk/blob/main/LICENSE)
+[Apache-2.0](https://github.com/OfficialSpicrawl/sdk/blob/main/LICENSE)
