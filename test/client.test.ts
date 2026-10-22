@@ -118,7 +118,7 @@ describe("client basics", () => {
   it("exposes response meta on a non-enumerable _meta", async () => {
     const { client } = mock(() =>
       json(envelope, 200, {
-        "x-engine": "obscura",
+        "x-engine": "js",
         "x-request-id": "01ABC",
         "x-credits-charged": "3",
         "x-credits-remaining": "997",
@@ -128,7 +128,7 @@ describe("client basics", () => {
         "x-ratelimit-reset": "30",
         "cache-state": "miss",
         "x-target-status": "200",
-        "x-warning": "ESCALATED: moved to obscura",
+        "x-warning": "ESCALATED: moved to browser",
       }),
     );
     const r = await client.scrape({ url: "https://example.com" });
@@ -136,11 +136,11 @@ describe("client basics", () => {
       requestId: "01ABC",
       creditsCharged: 3,
       creditsRemaining: 997,
-      engine: "obscura",
+      engine: "js",
       cacheState: "miss",
       targetStatus: 200,
       rateLimit: { limit: 100, remaining: 99, reset: 30 },
-      warnings: ["ESCALATED: moved to obscura"],
+      warnings: ["ESCALATED: moved to browser"],
     });
     expect(Object.keys(r)).not.toContain("_meta");
     expect(JSON.parse(JSON.stringify(r))).toEqual(envelope);
@@ -440,7 +440,7 @@ describe("raw formats", () => {
   it("pdf as ArrayBuffer", async () => {
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0xff]);
     const { client } = mock(() => new Response(bytes, { headers: { "content-type": "application/pdf" } }));
-    const r = await client.scrapeRaw({ url: "https://e", response_format: "pdf", engine: "chromium" });
+    const r = await client.scrapeRaw({ url: "https://e", response_format: "pdf" });
     expect(r.format).toBe("pdf");
     expect(new Uint8Array(r.body as ArrayBuffer)).toEqual(bytes);
   });

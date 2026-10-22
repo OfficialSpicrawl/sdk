@@ -3,6 +3,10 @@
 All notable changes to `@spicrawl/sdk` are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- README, the bundled `openapi.yaml` copy and the generated types no longer name browser engines. Screenshots and PDFs need no `engine` argument: rendering is chosen automatically, and `engine` and `headless` are deprecated and ignored by the API. The `engine` request type is now `string` instead of an engine enum. No runtime change.
+
 ## 0.1.3 — 2026-10-05
 
 - The repository moved to https://github.com/OfficialSpicrawl/sdk; the npm page links it and the provenance attestation is tied to it. No API changes.
