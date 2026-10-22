@@ -17,8 +17,8 @@ export class Browser {
   }
 
   /**
-   * **Coming soon.** Build a `wss://…/v1/browser` URL for `puppeteer.connect({ browserWSEndpoint })`
-   * or `chromium.connectOverCDP()`. Pass `{ token }` from `token()`. URLs end up in logs, so the
+   * **Coming soon.** Build a `wss://…/v1/browser` URL as the browser WebSocket endpoint
+   * of any CDP client. Pass `{ token }` from `token()`. URLs end up in logs, so the
    * API key is only embedded (as `apikey`) when you opt in with `{ includeApiKey: true }`.
    */
   connectURL(params: Omit<BrowserConnectParams, "apikey" | "api_key"> & { includeApiKey?: boolean } = {}): string {

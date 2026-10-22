@@ -15,19 +15,22 @@ export interface paths {
          * Scrape a URL (query-string form)
          * @description Fetch one URL synchronously and return it as html, markdown, text, a PDF, or a JSON envelope with extracted data.
          *
-         *     Choosing an engine (cheapest first):
-         *     - Default (fetch, 1 credit): plain HTTP, no JavaScript. Add `impersonate=true` (POST only, free) when a site rejects non-browser TLS fingerprints.
-         *     - `js_render=true` (obscura, 3): content is built by JavaScript, or you need wait/wait_for/actions/block_resources/network_capture.
-         *     - `engine=chromium` (8): needed for screenshot and response_format=pdf. `stealth=true` (camoufox) is coming soon.
-         *     - `mode=auto`: unsure - escalates through the available engines, bills only the rung that worked.
+         *     How a request is rendered (cheapest first). You do not choose: Spicrawl picks the cheapest path that can do what the request asks.
+         *     - Default (plain fetch, 1 credit): plain HTTP, no JavaScript, presenting a current browser TLS/HTTP2 fingerprint (`impersonate`, on by default and free; `impersonate=false` turns it off).
+         *     - `js_render=true` (JavaScript rendering, 3 credits): content is built by JavaScript, or you need wait/wait_for/block_resources/network_capture.
+         *     - Screenshots, `response_format=pdf` and `actions` use full-browser rendering (8 credits). `stealth=true` (full-browser rendering hardened against bot detection, 25 credits) is coming soon.
+         *     - `mode=auto`: unsure - escalates through the available rendering tiers, bills only the tier that worked.
          *     - Managed proxy pools (`premium_proxy`) are coming soon; during the beta pass your own proxy with `proxy`.
+         *     - The `engine` and `headless` fields are deprecated and ignored.
          *     Browser-only flags on the fetch tier are a 400, never silently ignored.
          *
-         *     Billing: failures cost 0 (errors, bot challenges, timeouts, target statuses other than 200/404/410 unless listed in allowed_status_codes, undelivered screenshots); cache hits cost 0. Check X-Credits-Charged.
+         *     Billing: failures cost 0 (errors, bot challenges, timeouts, target statuses other than 200/404/410 unless listed in allowed_status_codes, undelivered screenshots). A cache hit is billed at the same price as the fetch that stored it: the cache saves the fetch (latency and load on the target), not credits. Like any request, a hit is refused with 402 when the monthly allowance cannot cover its price. Check X-Credits-Charged.
+         *
+         *     Bot challenges: a challenge page attributed to a named vendor (Cloudflare, DataDome, PerimeterX, Akamai) is never returned as a success. A fetch through a managed pool exit that meets one is retried once on a different exit, free (GET/HEAD/OPTIONS only, not with `sticky_key` or `session_id`, never on your own `proxy`). When you bring your own `proxy` (residential works best) and send no `mode=auto`, a request whose page is still a challenge is escalated automatically to stronger full-browser rendering on the same exit, which works through the interstitial and returns the real page; there is no flag to set. This is how Cloudflare-protected pages are supported. Automatic handling on managed premium exits is coming soon. Success is not guaranteed for every page. Only the tier that returned the page is billed (up to 25 credits, or the first tier's price), and 0 if every tier was challenged (502 ERR::UPSTREAM::CHALLENGE). On the default shared pool a challenged page may return that error; retry with your own residential `proxy`. A transport error, a refusal with no vendor marker (such as a bare 403) or a non-billable status such as 404 does not escalate. Escalation is skipped for a non-GET method, response_format=pdf, a screenshot, actions, a `proxy` that is not http://, or a max_cost below the escalated price; an allowance that covers the first attempt but not the escalation runs the request without it. X-Engine reports the rendering tier that served, each abandoned tier adds an `X-Warning: ESCALATED`, and diagnostics.attempts lists every attempt (in the JSON envelope on a successful escalation). Batch items never escalate.
          *
          *     Status: the HTTP status is the platform's. A blocked or erroring site is usually still HTTP 200 - read envelope `status` or X-Target-Status for the site's answer. Errors are application/problem+json; retry only when `retryable` is true.
          *
-         *     Not idempotent: there is no idempotency key, and each call performs (and bills) a new scrape unless served from cache. GET and POST accept the same parameters and behave identically, except that GET does not accept `impersonate`.
+         *     Not idempotent: there is no idempotency key, and each call bills again, whether it performs a new scrape or is served from cache. GET and POST accept the same parameters and behave identically.
          */
         get: operations["scrapeGet"];
         put?: never;
@@ -35,19 +38,22 @@ export interface paths {
          * Scrape a URL
          * @description Fetch one URL synchronously and return it as html, markdown, text, a PDF, or a JSON envelope with extracted data.
          *
-         *     Choosing an engine (cheapest first):
-         *     - Default (fetch, 1 credit): plain HTTP, no JavaScript. Add `impersonate=true` (POST only, free) when a site rejects non-browser TLS fingerprints.
-         *     - `js_render=true` (obscura, 3): content is built by JavaScript, or you need wait/wait_for/actions/block_resources/network_capture.
-         *     - `engine=chromium` (8): needed for screenshot and response_format=pdf. `stealth=true` (camoufox) is coming soon.
-         *     - `mode=auto`: unsure - escalates through the available engines, bills only the rung that worked.
+         *     How a request is rendered (cheapest first). You do not choose: Spicrawl picks the cheapest path that can do what the request asks.
+         *     - Default (plain fetch, 1 credit): plain HTTP, no JavaScript, presenting a current browser TLS/HTTP2 fingerprint (`impersonate`, on by default and free; `impersonate=false` turns it off).
+         *     - `js_render=true` (JavaScript rendering, 3 credits): content is built by JavaScript, or you need wait/wait_for/block_resources/network_capture.
+         *     - Screenshots, `response_format=pdf` and `actions` use full-browser rendering (8 credits). `stealth=true` (full-browser rendering hardened against bot detection, 25 credits) is coming soon.
+         *     - `mode=auto`: unsure - escalates through the available rendering tiers, bills only the tier that worked.
          *     - Managed proxy pools (`premium_proxy`) are coming soon; during the beta pass your own proxy with `proxy`.
+         *     - The `engine` and `headless` fields are deprecated and ignored.
          *     Browser-only flags on the fetch tier are a 400, never silently ignored.
          *
-         *     Billing: failures cost 0 (errors, bot challenges, timeouts, target statuses other than 200/404/410 unless listed in allowed_status_codes, undelivered screenshots); cache hits cost 0. Check X-Credits-Charged.
+         *     Billing: failures cost 0 (errors, bot challenges, timeouts, target statuses other than 200/404/410 unless listed in allowed_status_codes, undelivered screenshots). A cache hit is billed at the same price as the fetch that stored it: the cache saves the fetch (latency and load on the target), not credits. Like any request, a hit is refused with 402 when the monthly allowance cannot cover its price. Check X-Credits-Charged.
+         *
+         *     Bot challenges: a challenge page attributed to a named vendor (Cloudflare, DataDome, PerimeterX, Akamai) is never returned as a success. A fetch through a managed pool exit that meets one is retried once on a different exit, free (GET/HEAD/OPTIONS only, not with `sticky_key` or `session_id`, never on your own `proxy`). When you bring your own `proxy` (residential works best) and send no `mode=auto`, a request whose page is still a challenge is escalated automatically to stronger full-browser rendering on the same exit, which works through the interstitial and returns the real page; there is no flag to set. This is how Cloudflare-protected pages are supported. Automatic handling on managed premium exits is coming soon. Success is not guaranteed for every page. Only the tier that returned the page is billed (up to 25 credits, or the first tier's price), and 0 if every tier was challenged (502 ERR::UPSTREAM::CHALLENGE). On the default shared pool a challenged page may return that error; retry with your own residential `proxy`. A transport error, a refusal with no vendor marker (such as a bare 403) or a non-billable status such as 404 does not escalate. Escalation is skipped for a non-GET method, response_format=pdf, a screenshot, actions, a `proxy` that is not http://, or a max_cost below the escalated price; an allowance that covers the first attempt but not the escalation runs the request without it. X-Engine reports the rendering tier that served, each abandoned tier adds an `X-Warning: ESCALATED`, and diagnostics.attempts lists every attempt (in the JSON envelope on a successful escalation). Batch items never escalate.
          *
          *     Status: the HTTP status is the platform's. A blocked or erroring site is usually still HTTP 200 - read envelope `status` or X-Target-Status for the site's answer. Errors are application/problem+json; retry only when `retryable` is true.
          *
-         *     Not idempotent: there is no idempotency key, and each call performs (and bills) a new scrape unless served from cache. GET and POST accept the same parameters and behave identically, except that GET does not accept `impersonate`.
+         *     Not idempotent: there is no idempotency key, and each call bills again, whether it performs a new scrape or is served from cache. GET and POST accept the same parameters and behave identically.
          */
         post: operations["scrapePost"];
         delete?: never;
@@ -333,7 +339,7 @@ export interface paths {
         put?: never;
         /**
          * Create a persisted browser session
-         * @description Creates a session: a sealed cookie jar and web-storage snapshot, pinned to one engine and one
+         * @description Creates a session: a sealed cookie jar and web-storage snapshot, pinned to one
          *     exit intent, that you reuse by passing its `id` as `session_id` on `/v1/scrape`.
          *
          *     Pitfalls:
@@ -346,14 +352,11 @@ export interface paths {
          *       Omitting both pins the exit: `sticky_key` is derived from the session id.
          *     - `ttl_seconds` above the organization's maximum is refused (400), never clamped. It slides on use
          *       but never past `hard_expires_at`.
-         *     - `proxy_country` requires `premium_proxy: true`. `fingerprint` requires `engine: camoufox`.
+         *     - `proxy_country` requires `premium_proxy: true`. `fingerprint` is an advanced option and may be refused with 400.
          *     - A project may hold only one active session per `sticky_key` (409 `ERR::REQUEST::CONFLICT`).
          *     - An organization may hold at most 100 live sessions (429 `ERR::LIMIT::SESSIONS_EXCEEDED`,
          *       Retry-After 30).
-         *     - When `engine` is omitted, the default is the first of `obscura`, `chromium` that the deployment runs,
-         *       else `fetch`. Check the `engine` in the response.
-         *     - An explicit `engine` must be `fetch` or a render engine this deployment runs; otherwise 503
-         *       `ERR::ENGINE::UNAVAILABLE` and nothing is created. The detail lists the deployed engines.
+         *     - `engine` is optional (`fetch`, `js` or `browser`): omit it and the session's rendering is chosen for you. Scrapes with the session run on that tier, so a `js` session refuses `actions`, `block_resources`, a screenshot and a PDF (400 `ERR::REQUEST::CAPABILITY_UNSUPPORTED`).
          */
         post: operations["sessionsCreate"];
         delete?: never;
@@ -474,10 +477,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Coming soon. Open a Chrome DevTools Protocol WebSocket to a cloud browser
+         * Coming soon. Open a DevTools Protocol (CDP) WebSocket to a cloud browser
          * @description Coming soon.
-         *     A WebSocket upgrade, not a JSON endpoint. Connect with `puppeteer.connect({browserWSEndpoint})` or
-         *     `chromium.connectOverCDP(url)`. Authenticate with, in order of preference: `Authorization: Bearer <key>`
+         *     A WebSocket upgrade, not a JSON endpoint. Connect with any CDP client, using the URL as its browser WebSocket endpoint. Authenticate with, in order of preference: `Authorization: Bearer <key>`
          *     on the upgrade; a single-use `token` from `POST /v1/browser/token` (60 s, one connection, bound to its
          *     options — the URL the CLI and MCP return); or the `apikey` query parameter (`api_key` alias), kept for
          *     ZenRows-style URLs. When `token` is present it is the only credential consulted. Requires the
@@ -496,7 +498,7 @@ export interface paths {
          *     `byte_limit` (the deployment's per-session traffic cap was reached, if configured),
          *     `upstream_closed` (the browser went away).
          *
-         *     Pricing: a session costs 8 credits per started minute, the same as one real-Chromium page. At
+         *     Pricing: a session costs 8 credits per started minute, the same as one full-browser-rendered page. At
          *     admission the session HOLDS the price of its whole `session_ttl` against the monthly credit
          *     allowance (default `session_ttl` 180 s = 24 credits; 60–900 s range = 8–120 credits). At close it
          *     is charged for the minutes it actually held (rounded up, capped at `session_ttl`'s minutes) and
@@ -864,8 +866,11 @@ export interface components {
             attempts?: {
                 /** @description Attempt number, from 1. */
                 n: number;
-                /** @description Engine this attempt ran on. */
-                engine?: string;
+                /**
+                 * @description Rendering tier this attempt used (`fetch`, `js` for JavaScript rendering, `browser` for full-browser rendering).
+                 * @enum {string}
+                 */
+                engine?: "fetch" | "js" | "browser";
                 /** @description Redacted exit label or proxy scheme and host. Never contains credentials. */
                 proxy?: string;
                 /** @description How the attempt ended. */
@@ -878,8 +883,11 @@ export interface components {
             budget_ms?: number;
             /** @description Time actually spent, in milliseconds. */
             elapsed_ms?: number;
-            /** @description Engine that served the final attempt. */
-            engine?: string;
+            /**
+             * @description Rendering tier that served the final attempt.
+             * @enum {string}
+             */
+            engine?: "fetch" | "js" | "browser";
             /** @description Redacted description of the exit used. */
             proxy?: {
                 /** @description Where the exit came from: `pool`, `custom` or `direct`. */
@@ -906,50 +914,50 @@ export interface components {
              */
             method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
             /**
-             * @description Render in a browser engine (obscura; 3 credits datacenter, 25 residential) so JavaScript runs. Required by every browser-only flag unless stealth or mode=auto is set; cannot be combined with mode=auto. If omitted, the project's stored default applies.
+             * @description Run the page's JavaScript before capture (3 credits on datacenter or your own proxy; 25 on managed residential exits, coming soon). Required by every browser-only flag unless stealth or mode=auto is set; cannot be combined with mode=auto. If omitted, the project's stored default applies.
              * @default false
              */
             js_render?: boolean;
             /**
-             * @description Coming soon. Render in the hardened camoufox browser, flat 25 credits at any proxy tier; wins over js_render when both are set. Cannot be combined with mode=auto or with an engine pin other than camoufox; returns 503 ERR::ENGINE::UNAVAILABLE where camoufox is not deployed. If omitted, the project's stored default applies.
+             * @description Coming soon. Render with full-browser rendering hardened against bot detection, flat 25 credits at any proxy tier; wins over js_render when both are set. Cannot be combined with mode=auto; returns 503 ERR::ENGINE::UNAVAILABLE where it is not available. If omitted, the project's stored default applies.
              * @default false
              */
             stealth?: boolean;
             /**
-             * @description Fetch tier only: present a real browser TLS/HTTP2 fingerprint to pass passive fingerprint checks, at no extra cost and with no JavaScript. Ignored on render engines. POST only - the GET form rejects `impersonate` as an unknown query parameter. If omitted, the project's stored default applies.
-             * @default false
+             * @description Fetch tier only: present a current browser TLS/HTTP2 fingerprint, with matching browser headers and Accept-Encoding, to pass passive fingerprint checks. On by default, free, no JavaScript; `false` turns it off and the fetch uses a non-browser TLS handshake. Ignored on rendered requests. If omitted, the project's stored default applies, and `true` when the project sets none.
+             * @default true
              */
             impersonate?: boolean;
             /**
-             * @description `auto` escalates through the available engines (fetch -> obscura) until a rung returns a usable page, billing only the rung that succeeded (0 if all fail) while reserving the dearest rung against quota. Incompatible with js_render, stealth and engine. If omitted, the project's stored default applies.
+             * @description `auto` escalates through the rendering tiers (plain fetch, then JavaScript rendering) until one returns a usable page, billing only the rung that succeeded (0 if all fail) while reserving the dearest rung against quota. Incompatible with js_render and stealth. If omitted, the project's stored default applies.
              * @enum {string}
              */
             mode?: "auto";
             /**
-             * @description Engine `camoufox` is coming soon. Pin the execution engine (case-insensitive); disables escalation and is never substituted. chromium (8 credits datacenter, 32 residential) is the only engine supporting headless=false; screenshots and pdf need camoufox or chromium. An unentitled engine is 403 ERR::AUTH::ENGINE_NOT_ENTITLED, an undeployed one 503 ERR::ENGINE::UNAVAILABLE, both at 0 credits. If omitted, the project's stored default applies.
-             * @enum {string}
+             * @deprecated
+             * @description Deprecated and ignored; rendering is chosen automatically from the request's flags and the page, and you are billed for the rendering tier actually used (`X-Engine`). Accepted so existing clients keep working. The response carries `X-Warning: ENGINE_IGNORED`.
              */
-            engine?: "fetch" | "obscura" | "camoufox" | "chromium";
+            engine?: string;
             /**
-             * @description Coming soon. Use residential exits from the managed pool: fetch 10, obscura 25, chromium 32 credits (camoufox stays 25). If no residential exit is available the request fails 503 ERR::PROXY::EXHAUSTED rather than falling back; ignored (with X-Warning PROXY_FLAG_IGNORED) when `proxy` is set. If omitted, the project's stored default applies.
+             * @description Coming soon; not available yet, so bring your own `proxy` (residential works best). Will use residential exits from the managed pool: 10 credits for a plain fetch, 25 with JavaScript rendering, 32 with full-browser rendering (stealth stays 25). If no residential exit is available the request fails 503 ERR::PROXY::EXHAUSTED rather than falling back; ignored (with X-Warning PROXY_FLAG_IGNORED) when `proxy` is set. See "Bot challenges" in the operation description. If omitted, the project's stored default applies.
              * @default false
              */
             premium_proxy?: boolean;
-            /** @description Coming soon. ISO 3166-1 alpha-2 exit country (case-insensitive), within the residential pool. Requires premium_proxy=true (400 ERR::REQUEST::INCOMPATIBLE_FLAGS otherwise) unless `proxy` is set, in which case it is ignored with a warning; an unavailable country is 503 ERR::PROXY::EXHAUSTED, never substituted. If omitted, the project's stored default applies. */
+            /** @description Coming soon. ISO 3166-1 alpha-2 exit country (case-insensitive), within the residential pool. Requires premium_proxy=true (400 ERR::REQUEST::INCOMPATIBLE_FLAGS otherwise) unless `proxy` is set, in which case it is kept as the render environment hint (browser timezone and locale follow it) while the custom URL stays the exit; an unavailable country is 503 ERR::PROXY::EXHAUSTED, never substituted. A browser render takes its timezone and locale from this country or, when it is omitted, from the country of the pool exit it was assigned. If omitted, the project's stored default applies. */
             proxy_country?: string;
-            /** @description Your own proxy URL (http, https, socks5 or socks5h; credentials in userinfo). Takes precedence over premium_proxy/proxy_country and adds 0 proxy credits; loopback hosts are refused with 400 ERR::SECURITY::SSRF_BLOCKED. An unreachable proxy fails 502 ERR::PROXY::UNREACHABLE. */
+            /** @description Your own proxy URL (http, https, socks5 or socks5h; credentials in userinfo). Takes precedence over premium_proxy and adds 0 proxy credits; proxy_country is kept as the render environment hint; loopback hosts are refused with 400 ERR::SECURITY::SSRF_BLOCKED. An unreachable proxy fails 502 ERR::PROXY::UNREACHABLE. A bot challenge from a named vendor is escalated automatically to stronger rendering on the same exit when the proxy is http:// (residential works best); see "Bot challenges" in the operation description. */
             proxy?: string;
             /**
              * @description Probe the custom `proxy` before spending the engine cost so a dead proxy fails fast. Requires `proxy` (400 ERR::REQUEST::INCOMPATIBLE_FLAGS otherwise).
              * @default false
              */
             proxy_verify?: boolean;
-            /** @description Reuse a session's cookies and storage (created via /v1/sessions); the session's engine is used and pinning a different engine is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Checked before any work, at 0 credits and not retryable - an unknown, malformed or other organization's id is 404 ERR::SESSION::NOT_FOUND, a released session 410 ERR::SESSION::RELEASED, an expired one 410 ERR::SESSION::EXPIRED. A successful request increments the session's `usage_count`, sets `last_used_at` and slides `expires_at`. Requests with a session are never cached. */
+            /** @description Reuse a session's cookies and storage (created via /v1/sessions); the request runs with the session's own rendering. Checked before any work, at 0 credits and not retryable - an unknown, malformed or other organization's id is 404 ERR::SESSION::NOT_FOUND, a released session 410 ERR::SESSION::RELEASED, an expired one 410 ERR::SESSION::EXPIRED. A successful request increments the session's `usage_count`, sets `last_used_at` and slides `expires_at`. Requests with a session are never cached. */
             session_id?: string;
             /** @description Coming soon. Any string; requests sharing it reuse the same pool exit. Forces a pool exit even on deployments whose default is direct egress, so it can fail 503 ERR::PROXY::EXHAUSTED where no pool exists. */
             sticky_key?: string;
             /**
-             * @description Milliseconds to wait after load before capture. Browser-only: needs js_render, stealth, an engine pin with a browser, or mode=auto, else 400 ERR::REQUEST::INCOMPATIBLE_FLAGS.
+             * @description Milliseconds to wait after load before capture. Browser-only: needs js_render, stealth, or mode=auto, else 400 ERR::REQUEST::INCOMPATIBLE_FLAGS.
              * @default 0
              */
             wait?: number;
@@ -960,14 +968,17 @@ export interface components {
              * @default 0
              */
             wait_for_timeout?: number;
-            /** @description Ordered browser workflow (click, fill, scroll, ...), validated before anything is spent. Browser-only; disables the default image/font blocking and makes the request uncacheable. A failed step ends the request at 0 credits unless that step has on_error=skip. */
+            /** @description Ordered browser workflow (click, fill, scroll, ...), validated before anything is spent. Browser-only and makes the request uncacheable. A failed step ends the request at 0 credits unless that step has on_error=skip. */
             actions?: components["schemas"]["ScrapeAction"][];
-            /** @description Subresource classes the browser must not load (plural and short aliases accepted, case-insensitive). If omitted, renders block image+font except for screenshot, pdf, actions, or a network_capture of images/fonts; an explicit list replaces that default and `none` (alone) blocks nothing. Any value other than `none` is browser-only. If omitted, the project's stored default applies. */
+            /** @description Subresource classes the browser must not load (plural and short aliases accepted, case-insensitive). If omitted, full-browser rendering blocks nothing, so images and fonts load, including for screenshot, pdf, actions and anti-bot escalation. A list blocks exactly the classes named and `none` (alone) blocks nothing. Any value other than `none` is browser-only. If omitted, the project's stored default applies. */
             block_resources?: ("none" | "document" | "documents" | "stylesheet" | "stylesheets" | "css" | "image" | "images" | "media" | "font" | "fonts" | "script" | "scripts" | "js" | "xhr" | "fetch" | "websocket" | "websockets" | "other")[];
-            /** @description false runs the browser on a real display (1920x1080 screen instead of 800x600); only engine=chromium supports it, anything else is 400 ERR::REQUEST::CAPABILITY_UNSUPPORTED at 0 credits. Either value requires a browser engine; omit to use the deployment default (headless). Headful renders skip the warm pool and add ~1s. If omitted, the project's stored default applies. */
+            /**
+             * @deprecated
+             * @description Deprecated and ignored. Rendering is chosen automatically. Accepted so existing clients keep working. The response carries `X-Warning: ENGINE_IGNORED`.
+             */
             headless?: boolean;
             /**
-             * @description Capture a screenshot; forces the JSON envelope (image base64 under `screenshots`). Needs a rasterising engine (camoufox or chromium) - otherwise 400 ERR::REQUEST::CAPABILITY_UNSUPPORTED at 0 credits. mode=auto cannot satisfy it (its fetch rung has no rasteriser). If the image is not delivered the page is still returned but charged 0.
+             * @description Capture a screenshot; forces the JSON envelope (image base64 under `screenshots`). Rendered with full-browser rendering - on a deployment without it, 400 ERR::REQUEST::CAPABILITY_UNSUPPORTED at 0 credits. mode=auto cannot satisfy it (its fetch rung has no rasteriser). If the image is not delivered the page is still returned but charged 0.
              * @default false
              */
             screenshot?: boolean;
@@ -1022,13 +1033,13 @@ export interface components {
              */
             parse_pdf?: boolean;
             /**
-             * @description Body shape: html/markdown/text return the document itself, json the envelope, pdf a browser-printed PDF (needs camoufox or chromium). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies.
+             * @description Body shape: html/markdown/text return the document itself, json the envelope, pdf a PDF printed by a real browser (needs full-browser rendering). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies.
              * @default html
              * @enum {string}
              */
             response_format?: "html" | "markdown" | "text" | "json" | "pdf";
             /**
-             * @description Serve a stored result younger than cache_ttl (Cache-State: hit, 0 credits). Only billable successes of GET-method requests without session_id or actions are stored. Set false for time-sensitive data; cache=false with cache_ttl>0 is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS.
+             * @description Serve a stored result younger than cache_ttl (Cache-State: hit). A hit is billed at the same price as the fetch that stored it: the cache saves the fetch (latency and load on the target), not credits. Only billable successes of GET-method requests without session_id or actions are stored. Set false for time-sensitive data; cache=false with cache_ttl>0 is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS.
              * @default true
              */
             cache?: boolean;
@@ -1262,7 +1273,7 @@ export interface components {
         };
         /**
          * screenshot
-         * @description Capture a screenshot mid-workflow (needs camoufox or chromium); returned under `screenshots` with this step's label.
+         * @description Capture a screenshot mid-workflow (needs full-browser rendering); returned under `screenshots` with this step's label.
          */
         ScrapeActionScreenshot: {
             /** @description Unknown keys inside the verb object are ignored. */
@@ -1445,7 +1456,8 @@ export interface components {
             }[];
             attempts?: {
                 n: number;
-                engine?: string;
+                /** @enum {string} */
+                engine?: "fetch" | "js" | "browser";
                 proxy?: string;
                 outcome: string;
                 ms: number;
@@ -1453,7 +1465,8 @@ export interface components {
             }[];
             budget_ms?: number;
             elapsed_ms?: number;
-            engine?: string;
+            /** @enum {string} */
+            engine?: "fetch" | "js" | "browser";
             proxy?: {
                 source?: string;
                 endpoint?: string;
@@ -1480,10 +1493,10 @@ export interface components {
             /** @description Credits charged for this request (same as X-Credits-Charged). */
             credits: number;
             /**
-             * @description Engine that produced the page.
+             * @description The rendering tier used to produce the page. `fetch` is HTTP only, `js` is JavaScript rendering, `browser` is full-browser rendering.
              * @enum {string}
              */
-            engine: "fetch" | "obscura" | "camoufox" | "chromium";
+            engine?: "fetch" | "js" | "browser";
             /** @enum {string} */
             proxy_source: "pool" | "custom" | "direct";
             /** @description Human-readable warnings (messages only; codes are on X-Warning). */
@@ -1518,100 +1531,104 @@ export interface components {
          *     job-level value, overridden by the item's value (an explicit `false` on an item wins), with the project's
          *     dashboard defaults underneath both. Validation happens for every item at submission.
          *
-         *     IMPORTANT — what the current batch worker actually executes: only `js_render`, `stealth`, `premium_proxy`,
-         *     `proxy_country`, `proxy` (always with verify off) and, on rendered items, `block_resources`. Requests are always
-         *     GET and the payload is the raw page (HTML, or the decoded body for non-rendered fetches). Every other field is
-         *     accepted, validated and counted in the credit reservation for parity with /v1/scrape, but has no effect on the
-         *     batch result. If you need extraction, screenshots, actions, sessions or a non-HTML `response_format`, use /v1/scrape.
+         *     What the batch worker executes: each item is one fetch or one render, and the document is returned as
+         *     `response_format` (`html` by default, `json`, `markdown` or `text`). A field is either honoured on a batch item
+         *     or refused at submission, never accepted and skipped. Refused with 400 INVALID_PARAMETER, naming every offending
+         *     field, with nothing queued or charged: `actions`, `screenshot` and its options, `network_capture`, `extract`,
+         *     `extract_preset`, `ai_extract`, `autoparse`, `links`, `session_id`, `cache`/`cache_ttl`, `original_status`,
+         *     `allowed_status_codes`, `parse_pdf=true`, `mode=auto`, `response_format=pdf`, and a non-GET `method` with
+         *     `js_render` or `stealth`. A value that asks for nothing (`screenshot: false`, an empty list) is accepted. A
+         *     refusal caused by a project default says so in `detail`. Use /v1/scrape for those fields.
+         *
+         *     A batch item is priced when it is accepted, so a bot challenge never escalates it to stronger rendering or retries it on a
+         *     different exit the way it can a /v1/scrape request with your own `proxy`.
          */
         BatchScrapeParams: {
-            /** @description Validated as on /v1/scrape, but the batch worker always sends GET. Leave unset. */
+            /** @description Honoured on fetched items. A method other than GET with `js_render` or `stealth` is refused with 400, because a browser navigation is always a GET. */
             method?: components["schemas"]["ScrapeRequest"]["method"];
-            /** @description Render the page with the obscura browser engine. Honoured by the batch worker. Default false (or the project default). */
+            /** @description Run the page's JavaScript before capture. Honoured by the batch worker. Default false (or the project default). */
             js_render?: components["schemas"]["ScrapeRequest"]["js_render"];
-            /** @description Coming soon. Render with the camoufox anti-detection engine; takes precedence over `js_render`. Honoured by the batch worker. Default false (or the project default). */
+            /** @description Coming soon. Render with full-browser rendering hardened against bot detection; takes precedence over `js_render`. Honoured by the batch worker. Default false (or the project default). */
             stealth?: components["schemas"]["ScrapeRequest"]["stealth"];
-            /** @description Validated and priced as on /v1/scrape; not applied by the batch worker. */
+            /** @description Applied by the batch worker on fetched items. Default true, as on /v1/scrape; false on the item, the job or the project defaults opts out. */
             impersonate?: components["schemas"]["ScrapeRequest"]["impersonate"];
-            /** @description Validated and priced as on /v1/scrape (`auto` reserves the dearest tier). The batch worker does not escalate; it runs fetch unless `js_render` or `stealth` is set. Cannot be combined with `engine` (400 INCOMPATIBLE_FLAGS). */
+            /** @description `auto` is refused on batch with 400 INVALID_PARAMETER, also when it comes from the project defaults; the batch worker does not escalate. It runs the rendering that `js_render` or `stealth` selects. */
             mode?: components["schemas"]["ScrapeRequest"]["mode"];
             /**
-             * @description Engine `camoufox` is coming soon.
-             *     Engine pin. On batch only `fetch`, `obscura`, `camoufox` are allowed; `chromium` is rejected with 400
-             *     INVALID_PARAMETER (use /v1/scrape for chromium). Also 400 INCOMPATIBLE_FLAGS for: `mode=auto` plus any pin;
-             *     `stealth=true` with a pin other than camoufox; `js_render=true` with `fetch`; `screenshot=true` with `fetch`
-             *     or `obscura`. A pin the plan does not include is 403 (plans whose entitlements cannot be read allow only
-             *     fetch and obscura). To be sure the worker renders, set `js_render` (obscura) or `stealth` (camoufox) rather
-             *     than relying on the pin alone.
+             * @deprecated
+             * @description Deprecated and ignored; rendering is chosen automatically. The job's `warnings` report the ignored field.
              */
             engine?: components["schemas"]["ScrapeRequest"]["engine"];
             /** @description Coming soon. Use the residential proxy pool instead of datacenter. Honoured by the batch worker; ignored when `proxy` is set. */
             premium_proxy?: components["schemas"]["ScrapeRequest"]["premium_proxy"];
             /** @description Coming soon. Exit country for pool proxies. Honoured by the batch worker. */
             proxy_country?: components["schemas"]["ScrapeRequest"]["proxy_country"];
-            /** @description Your own proxy URL; wins over the pool flags. Honoured by the batch worker (without proxy verification). */
+            /** @description Your own proxy URL; wins over the pool flags. Honoured by the batch worker. */
             proxy?: components["schemas"]["ScrapeRequest"]["proxy"];
-            /** @description Validated as on /v1/scrape; the batch worker always sends the custom proxy with verification off. */
+            /** @description Honoured by the batch worker: the custom proxy is probed before the engine cost is spent. */
             proxy_verify?: components["schemas"]["ScrapeRequest"]["proxy_verify"];
-            /** @description Validated as on /v1/scrape; batch items do not run inside a session. Not applied. */
+            /** @description Batch items do not run inside a session. Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             session_id?: components["schemas"]["ScrapeRequest"]["session_id"];
-            /** @description Coming soon. Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Coming soon. Honoured by the batch worker: equal keys are pinned to the same pool exit. */
             sticky_key?: components["schemas"]["ScrapeRequest"]["sticky_key"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Honoured on rendered items. */
             wait?: components["schemas"]["ScrapeRequest"]["wait"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Honoured on rendered items. */
             wait_for?: components["schemas"]["ScrapeRequest"]["wait_for"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Honoured on rendered items. */
             wait_for_timeout?: components["schemas"]["ScrapeRequest"]["wait_for_timeout"];
-            /** @description Validated as on /v1/scrape; the batch worker does not run browser actions. */
+            /** @description The batch worker does not run browser actions. A non-empty list is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             actions?: components["schemas"]["ScrapeRequest"]["actions"];
-            /** @description Resource classes to block while rendering. Honoured on rendered items only; unset blocks images and fonts, `none` blocks nothing, a list replaces the default. Falls back to the project default when unset. */
+            /** @description Resource classes to block while rendering. Honoured on rendered items only; unset blocks nothing on full-browser rendering, `none` blocks nothing, a list blocks the classes named. Falls back to the project default when unset. */
             block_resources?: components["schemas"]["ScrapeRequest"]["block_resources"];
-            /** @description Validated as on /v1/scrape (the project default for headless is NOT merged on batch). `false` needs chromium, which batch cannot pin. Not applied by the batch worker. */
+            /**
+             * @deprecated
+             * @description Deprecated and ignored. The browser mode is chosen automatically.
+             */
             headless?: components["schemas"]["ScrapeRequest"]["headless"];
-            /** @description Validated and priced as on /v1/scrape; the batch worker returns no screenshot. With `engine` fetch/obscura it is a 400. */
+            /** @description The batch worker returns no screenshot. `true` is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             screenshot?: components["schemas"]["ScrapeRequest"]["screenshot"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             screenshot_fullpage?: components["schemas"]["ScrapeRequest"]["screenshot_fullpage"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             screenshot_selector?: components["schemas"]["ScrapeRequest"]["screenshot_selector"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             screenshot_format?: components["schemas"]["ScrapeRequest"]["screenshot_format"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             screenshot_quality?: components["schemas"]["ScrapeRequest"]["screenshot_quality"];
-            /** @description Validated as on /v1/scrape; the batch worker does not send custom headers. */
+            /** @description Honoured by the batch worker on every item. Falls back to the project default when unset. */
             custom_headers?: components["schemas"]["ScrapeRequest"]["custom_headers"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             autoparse?: components["schemas"]["ScrapeRequest"]["autoparse"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. Also refused when it comes from the project defaults, and `detail` says so. */
             links?: components["schemas"]["ScrapeRequest"]["links"];
-            /** @description Validated as on /v1/scrape (see NetworkCapture); not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             network_capture?: components["schemas"]["ScrapeRequest"]["network_capture"];
-            /** @description Validated as on /v1/scrape; the batch worker returns the raw page, not extracted fields. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             extract?: components["schemas"]["ScrapeRequest"]["extract"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             extract_preset?: components["schemas"]["ScrapeRequest"]["extract_preset"];
-            /** @description Validated as on /v1/scrape (see AIExtract); not applied by the batch worker. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             ai_extract?: components["schemas"]["ScrapeRequest"]["ai_extract"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Honoured on `markdown` and `text` items. Unset means off. Falls back to the project default when unset. */
             main_content_only?: components["schemas"]["ScrapeRequest"]["main_content_only"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Honoured on `markdown` and `text` items. */
             include_tags?: components["schemas"]["ScrapeRequest"]["include_tags"];
-            /** @description Validated as on /v1/scrape; not applied by the batch worker. */
+            /** @description Honoured on `markdown` and `text` items. */
             exclude_tags?: components["schemas"]["ScrapeRequest"]["exclude_tags"];
-            /** @description Validated as on /v1/scrape (default true); not applied by the batch worker. */
+            /** @description The batch worker has no PDF parser. `true` is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. `false` is accepted. */
             parse_pdf?: components["schemas"]["ScrapeRequest"]["parse_pdf"];
-            /** @description Validated as on /v1/scrape, but the batch worker always returns the raw page body regardless of this value (no markdown, json, text or pdf conversion). */
+            /** @description Honoured. `html` (the default) and `json` return the document as retrieved; `markdown` and `text` run the same conversion as /v1/scrape. A document that is not HTML (a PDF, an image, JSON) fails a `markdown` or `text` item with EXTRACTION_FAILED; request `html` to get it as retrieved. `pdf` is refused with 400, also when it comes from the project defaults. */
             response_format?: components["schemas"]["ScrapeRequest"]["response_format"];
-            /** @description Validated as on /v1/scrape, but on batch it defaults to false (not true) and the worker never reads from the cache. */
+            /** @description Batch never reads from the result cache. `true` is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             cache?: components["schemas"]["ScrapeRequest"]["cache"];
-            /** @description Validated as on /v1/scrape; `0` does not imply `cache=false` on batch. Not applied by the batch worker. */
+            /** @description A non-zero value is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             cache_ttl?: components["schemas"]["ScrapeRequest"]["cache_ttl"];
             /** @description Per-ITEM credit ceiling, checked at submission against the item's dearest outcome (400 if exceeded). For a ceiling on the whole run use `credit_budget`. */
             max_cost?: components["schemas"]["ScrapeRequest"]["max_cost"];
-            /** @description Validated as on /v1/scrape; not applied (result lines always carry the target status in `http_status`). */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. Result lines always carry the target status in `http_status`. */
             original_status?: components["schemas"]["ScrapeRequest"]["original_status"];
-            /** @description Validated as on /v1/scrape; not applied. Billing is fixed to target statuses 200, 404 and 410. */
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. Billing is fixed to target statuses 200, 404 and 410. */
             allowed_status_codes?: components["schemas"]["ScrapeRequest"]["allowed_status_codes"];
         };
         /**
@@ -1791,7 +1808,7 @@ export interface components {
             status_url: string;
             /** @description Relative path of the JSONL results: /v1/batch/{id}/results. */
             results_url: string;
-            /** @description The job-level scrape parameters as stored (your top-level BatchScrapeParams, without `url`), plus `credit_budget_micro` — the run ceiling the worker enforces. Always present, possibly only `credit_budget_micro`. */
+            /** @description The job-level scrape parameters as stored (your top-level BatchScrapeParams, without `url`), plus two keys the API sets and you cannot — `credit_budget_micro`, the run ceiling the worker enforces, and `default_proxy_tier` (`direct` or `datacenter`), the exit an item that sets no `proxy`, `premium_proxy`, `proxy_country` or `sticky_key` takes, decided at submission the way `/v1/scrape` decides it. Always present, possibly only those two. */
             params: {
                 [key: string]: unknown;
             };
@@ -1891,11 +1908,11 @@ export interface components {
          *     (no content, page budget spent); `unavailable` (the file could not be read).
          */
         BatchResultBody: {
-            /** @description The worker's stored `result` value as raw JSON text (currently a JSON string literal holding the page HTML, so JSON-decode it once to get the HTML). May be a byte prefix when `truncated`, in which case it is not valid JSON. */
+            /** @description The document as plain text, in the item's `response_format` (the HTML, markdown or text itself). It is the line's ordinary JSON string, already decoded by your JSON parser once, so do not decode it again. For `response_format` `json` it is the JSON document as a string (the body as retrieved), which you parse to get the object. May be a byte prefix when `truncated`. */
             content?: string;
             /**
              * Format: int64
-             * @description Full size of the stored payload in bytes, before any truncation. Compare with the length of `content`. 0 when `unavailable`.
+             * @description Full size of the payload in bytes, before any truncation; equal to the length of `content` unless `truncated`. 0 when `unavailable`.
              */
             bytes: number;
             /** @description True when `content` is only a prefix: the payload exceeded 512 KiB, or the page's remaining 2 MiB budget. Request this seq alone (cursor just before it, limit=1) to get up to 512 KiB. */
@@ -1958,6 +1975,8 @@ export interface components {
              * @description Wall-clock time spent on the item's final attempt, in ms. 0 when not recorded.
              */
             duration_ms: number;
+            /** @description Warning codes for this item, e.g. `EMPTY_RENDER` (the page rendered empty, so the item was charged 0 credits). Omitted when there are none. */
+            warnings?: string[];
             /** @description Storage pointer for a per-item payload. Currently never populated (the worker writes one file per job); ignore it. */
             result_ref?: string;
             /** @description The payload inline. Absent while the job is still running (no stitched file yet), when the deployment has no object storage, or when this item has no stored payload (typically non-succeeded items). */
@@ -1976,13 +1995,13 @@ export interface components {
             finished_at?: string;
         };
         /**
-         * @description Engine a session is pinned to for its whole life. Scrapes on the session run on this engine; `fingerprint` is only valid with `camoufox`.
+         * @description The rendering tier a session is bound to for its lifetime (`fetch` is HTTP only, `js` is JavaScript rendering, `browser` is full-browser rendering). Chosen automatically when the session is created unless the create names one.
          * @enum {string}
          */
-        SessionEngine: "fetch" | "obscura" | "chromium" | "camoufox";
+        SessionEngine: "fetch" | "js" | "browser";
         /** @description Body of `POST /v1/sessions`. All fields optional; unknown fields are refused with 400. */
         SessionCreateRequest: {
-            /** @description Engine `camoufox` is coming soon. Engine to pin. Case-insensitive. Omitted means the first of `obscura`, `chromium` that this deployment runs, else `fetch`. Choose explicitly if you need a browser-only feature such as localStorage. */
+            /** @description Optional. The rendering tier to bind the session to (`fetch`, `js` or `browser`); omit it and one is chosen for you. A tier the deployment does not offer is 503 `ERR::ENGINE::UNAVAILABLE`. */
             engine?: components["schemas"]["SessionEngine"];
             /**
              * @description Sliding lifetime in seconds. Omitted or 0 means 1800, reduced to the organization maximum with a warning if that is lower. Values above the organization maximum (default 604800, i.e. 7 days) are refused with 400 naming the real maximum.
@@ -2005,7 +2024,7 @@ export interface components {
             premium_proxy?: boolean;
             /** @description Coming soon. ISO 3166-1 alpha-2 exit country, case-insensitive. Requires `premium_proxy: true`, otherwise 400 `ERR::REQUEST::INCOMPATIBLE_FLAGS`. */
             proxy_country?: string;
-            /** @description Camoufox fingerprint pin, stored verbatim. A non-empty object with any engine other than `camoufox` is refused with 400. `null` and `{}` count as absent. */
+            /** @description Browser fingerprint pin, stored verbatim. Advanced option; a non-empty object is refused with 400 where the session's rendering cannot apply it. `null` and `{}` count as absent. */
             fingerprint?: Record<string, unknown> | null;
             /** @description Seed per-domain health, keyed by lowercase registrable domain (e.g. `example.com`). Scores must be non-negative. Above 64 entries, the least useful (unblocked, lowest score, oldest) are evicted rather than refused. */
             domain_scores?: {
@@ -2023,7 +2042,7 @@ export interface components {
             id: string;
             /** @description Project the session belongs to (the creating key's project). */
             project_id: string;
-            engine: components["schemas"]["SessionEngine"];
+            engine?: components["schemas"]["SessionEngine"];
             /**
              * @description Derived from the clock, not a stored flag. `active` sessions can be used; `released` and `expired` ones have no context and cannot be revived. Create a new session.
              * @enum {string}
@@ -2070,7 +2089,7 @@ export interface components {
             domain_scores?: {
                 [key: string]: components["schemas"]["SessionDomainScore"];
             };
-            /** @description Camoufox fingerprint, as stored. Omitted when none was set. */
+            /** @description Browser fingerprint, as stored. Omitted when none was set. */
             fingerprint?: Record<string, unknown>;
             lease?: components["schemas"]["SessionLease"];
             /** @description Decisions made on your behalf at creation, e.g. a TTL reduced to the organization maximum. Only on the create response; omitted when empty. */
@@ -2190,7 +2209,7 @@ export interface components {
             /** @description Stored format version. Currently 1. */
             schema_version: number;
             session_context: components["schemas"]["SessionContext"];
-            /** @description Stored Camoufox fingerprint, or null when none. Omitted only in edge cases. */
+            /** @description Stored browser fingerprint, or null when none. Omitted only in edge cases. */
             fingerprint?: Record<string, unknown> | null;
             /** @description Per-domain standing, as stored. `{}` when empty. */
             domain_scores?: {
@@ -2235,8 +2254,8 @@ export interface components {
              * @example 01M0FJZ8Q3W4B5T8J2V9K6X1RD
              */
             project_id: string;
-            /** @description Engine that served it, e.g. `fetch`, `obscura`, `chromium`, `camoufox`. May be empty for requests refused before an engine was chosen. */
-            engine: string;
+            /** @description Rendering tier that served it (`fetch`, `js` or `browser`). Empty for requests refused before a tier was chosen. */
+            engine?: string;
             /**
              * @description Terminal outcome. Only `success` is ever charged.
              * @enum {string}
@@ -2328,7 +2347,7 @@ export interface components {
             /** @description What the caller experienced inside the handler, excluding writing the body. */
             total_ms: number | null;
         };
-        /** @description Present only when a bot challenge was detected. Use `vendor` to pick a countermeasure (e.g. stealth engine or residential exit). */
+        /** @description Present only when a bot challenge was detected. Use `vendor` to pick a countermeasure (e.g. stealth rendering or residential exit). */
         RequestLogBlock: {
             /** @description Anti-bot vendor, e.g. `akamai`, `cloudflare`. */
             vendor?: string;
@@ -2390,9 +2409,9 @@ export interface components {
             [key: string]: number;
         };
         UsageGroup: {
-            /** @description Bucket key: a `YYYY-MM-DD` day, a project id, an engine name, or a feature (`extract`, `ai_extract`, `proxy_datacenter`, `proxy_residential`, `batch`). Groups are sorted by key. */
+            /** @description Bucket key: a `YYYY-MM-DD` day, a project id, a rendering tier (`fetch`, `js` or `browser`), or a feature (`extract`, `ai_extract`, `proxy_datacenter`, `proxy_residential`, `batch`). Groups are sorted by key. */
             key: string;
-            /** @description Human label for engine groups (e.g. `Chromium`). Absent for other dimensions and unknown engines. */
+            /** @description Human label for rendering-tier groups (for example "JavaScript rendering"). Absent for other dimensions and unknown tiers. */
             label?: string;
             metrics: components["schemas"]["UsageMetricMap"];
         };
@@ -2826,11 +2845,11 @@ export interface components {
         "Retry-After": number;
         /** @description ULID of this request. Quote it in support requests and use it with `GET /v1/requests/{id}`. */
         "X-Request-Id": string;
-        /** @description Requests allowed in the current window. */
+        /** @description Size of the key's rate-limit bucket, the most requests that can be sent back to back. */
         "X-RateLimit-Limit": number;
-        /** @description Requests left in the current window. */
+        /** @description Requests left in that bucket. Never above `X-RateLimit-Limit`. */
         "X-RateLimit-Remaining": number;
-        /** @description Seconds until the window resets. */
+        /** @description Seconds until the bucket has one request available again. Only sent when the limiter imposed a wait. */
         "X-RateLimit-Reset": number;
     };
     pathItems: never;
@@ -2844,39 +2863,47 @@ export interface operations {
                 url: string;
                 /** @description HTTP method sent to the target (case-insensitive). There is no request-body parameter, so non-GET methods are sent without a body; only GET/HEAD/OPTIONS are retried on transient failure and only GET results are cached. */
                 method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
-                /** @description Render in a browser engine (obscura; 3 credits datacenter, 25 residential) so JavaScript runs. Required by every browser-only flag unless stealth or mode=auto is set; cannot be combined with mode=auto. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?js_render` means true. */
+                /** @description Run the page's JavaScript before capture (3 credits on datacenter or your own proxy; 25 on managed residential exits, coming soon). Required by every browser-only flag unless stealth or mode=auto is set; cannot be combined with mode=auto. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?js_render` means true. */
                 js_render?: boolean;
-                /** @description Coming soon. Render in the hardened camoufox browser, flat 25 credits at any proxy tier; wins over js_render when both are set. Cannot be combined with mode=auto or with an engine pin other than camoufox; returns 503 ERR::ENGINE::UNAVAILABLE where camoufox is not deployed. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?stealth` means true. */
+                /** @description Coming soon. Render with full-browser rendering hardened against bot detection, flat 25 credits at any proxy tier; wins over js_render when both are set. Cannot be combined with mode=auto; returns 503 ERR::ENGINE::UNAVAILABLE where it is not available. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?stealth` means true. */
                 stealth?: boolean;
-                /** @description `auto` escalates through the available engines (fetch -> obscura) until a rung returns a usable page, billing only the rung that succeeded (0 if all fail) while reserving the dearest rung against quota. Incompatible with js_render, stealth and engine. If omitted, the project's stored default applies. */
+                /** @description Fetch tier only. Present a current browser TLS/HTTP2 fingerprint, with matching browser headers and Accept-Encoding, to pass passive fingerprint checks. On by default, free, no JavaScript; `impersonate=false` turns it off and the fetch uses a non-browser TLS handshake. Ignored on rendered requests. If omitted, the project's stored default applies, and true when the project sets none. Accepts true/false/1/0; a bare `?impersonate` means true. */
+                impersonate?: boolean;
+                /** @description `auto` escalates through the rendering tiers (plain fetch, then JavaScript rendering) until one returns a usable page, billing only the rung that succeeded (0 if all fail) while reserving the dearest rung against quota. Incompatible with js_render and stealth. If omitted, the project's stored default applies. */
                 mode?: "auto";
-                /** @description Engine `camoufox` is coming soon. Pin the execution engine (case-insensitive); disables escalation and is never substituted. chromium (8 credits datacenter, 32 residential) is the only engine supporting headless=false; screenshots and pdf need camoufox or chromium. An unentitled engine is 403 ERR::AUTH::ENGINE_NOT_ENTITLED, an undeployed one 503 ERR::ENGINE::UNAVAILABLE, both at 0 credits. If omitted, the project's stored default applies. */
-                engine?: "fetch" | "obscura" | "camoufox" | "chromium";
-                /** @description Coming soon. Use residential exits from the managed pool: fetch 10, obscura 25, chromium 32 credits (camoufox stays 25). If no residential exit is available the request fails 503 ERR::PROXY::EXHAUSTED rather than falling back; ignored (with X-Warning PROXY_FLAG_IGNORED) when `proxy` is set. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?premium_proxy` means true. */
+                /**
+                 * @deprecated
+                 * @description Deprecated and ignored; rendering is chosen automatically from the request's flags and the page, and you are billed for the rendering tier actually used (`X-Engine`). Accepted so existing clients keep working. The response carries `X-Warning: ENGINE_IGNORED`.
+                 */
+                engine?: string;
+                /** @description Coming soon; not available yet, so bring your own `proxy` (residential works best). Will use residential exits from the managed pool: 10 credits for a plain fetch, 25 with JavaScript rendering, 32 with full-browser rendering (stealth stays 25). If no residential exit is available the request fails 503 ERR::PROXY::EXHAUSTED rather than falling back; ignored (with X-Warning PROXY_FLAG_IGNORED) when `proxy` is set. See "Bot challenges" in the operation description. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?premium_proxy` means true. */
                 premium_proxy?: boolean;
-                /** @description Coming soon. ISO 3166-1 alpha-2 exit country (case-insensitive), within the residential pool. Requires premium_proxy=true (400 ERR::REQUEST::INCOMPATIBLE_FLAGS otherwise) unless `proxy` is set, in which case it is ignored with a warning; an unavailable country is 503 ERR::PROXY::EXHAUSTED, never substituted. If omitted, the project's stored default applies. */
+                /** @description Coming soon. ISO 3166-1 alpha-2 exit country (case-insensitive), within the residential pool. Requires premium_proxy=true (400 ERR::REQUEST::INCOMPATIBLE_FLAGS otherwise) unless `proxy` is set, in which case it is kept as the render environment hint (browser timezone and locale follow it) while the custom URL stays the exit; an unavailable country is 503 ERR::PROXY::EXHAUSTED, never substituted. A browser render takes its timezone and locale from this country or, when it is omitted, from the country of the pool exit it was assigned. If omitted, the project's stored default applies. */
                 proxy_country?: string;
-                /** @description Your own proxy URL (http, https, socks5 or socks5h; credentials in userinfo). Takes precedence over premium_proxy/proxy_country and adds 0 proxy credits; loopback hosts are refused with 400 ERR::SECURITY::SSRF_BLOCKED. An unreachable proxy fails 502 ERR::PROXY::UNREACHABLE. */
+                /** @description Your own proxy URL (http, https, socks5 or socks5h; credentials in userinfo). Takes precedence over premium_proxy and adds 0 proxy credits; proxy_country is kept as the render environment hint; loopback hosts are refused with 400 ERR::SECURITY::SSRF_BLOCKED. An unreachable proxy fails 502 ERR::PROXY::UNREACHABLE. A bot challenge from a named vendor is escalated automatically to stronger rendering on the same exit when the proxy is http:// (residential works best); see "Bot challenges" in the operation description. */
                 proxy?: string;
                 /** @description Probe the custom `proxy` before spending the engine cost so a dead proxy fails fast. Requires `proxy` (400 ERR::REQUEST::INCOMPATIBLE_FLAGS otherwise). Accepts true/false/1/0; a bare `?proxy_verify` means true. */
                 proxy_verify?: boolean;
-                /** @description Reuse a session's cookies and storage (created via /v1/sessions); the session's engine is used and pinning a different engine is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Checked before any work, at 0 credits and not retryable - an unknown, malformed or other organization's id is 404 ERR::SESSION::NOT_FOUND, a released session 410 ERR::SESSION::RELEASED, an expired one 410 ERR::SESSION::EXPIRED. A successful request increments the session's `usage_count`, sets `last_used_at` and slides `expires_at`. Requests with a session are never cached. */
+                /** @description Reuse a session's cookies and storage (created via /v1/sessions); the request runs with the session's own rendering. Checked before any work, at 0 credits and not retryable - an unknown, malformed or other organization's id is 404 ERR::SESSION::NOT_FOUND, a released session 410 ERR::SESSION::RELEASED, an expired one 410 ERR::SESSION::EXPIRED. A successful request increments the session's `usage_count`, sets `last_used_at` and slides `expires_at`. Requests with a session are never cached. */
                 session_id?: string;
                 /** @description Coming soon. Any string; requests sharing it reuse the same pool exit. Forces a pool exit even on deployments whose default is direct egress, so it can fail 503 ERR::PROXY::EXHAUSTED where no pool exists. */
                 sticky_key?: string;
-                /** @description Milliseconds to wait after load before capture. Browser-only: needs js_render, stealth, an engine pin with a browser, or mode=auto, else 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. */
+                /** @description Milliseconds to wait after load before capture. Browser-only: needs js_render, stealth, or mode=auto, else 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. */
                 wait?: number;
                 /** @description CSS selector to wait for before capture. Browser-only. If it never appears the page is returned as it stood with an X-Warning RENDER_DEGRADED; if the render times out waiting it fails 504 ERR::UPSTREAM::TIMEOUT - raise wait_for_timeout or fix the selector. */
                 wait_for?: string;
                 /** @description Milliseconds to wait for `wait_for`; 0 uses the engine default. Requires wait_for (400 ERR::REQUEST::INCOMPATIBLE_FLAGS otherwise). */
                 wait_for_timeout?: number;
-                /** @description URL-encoded JSON array. Ordered browser workflow (click, fill, scroll, ...), validated before anything is spent. Browser-only; disables the default image/font blocking and makes the request uncacheable. A failed step ends the request at 0 credits unless that step has on_error=skip. */
+                /** @description URL-encoded JSON array. Ordered browser workflow (click, fill, scroll, ...), validated before anything is spent. Browser-only and makes the request uncacheable. A failed step ends the request at 0 credits unless that step has on_error=skip. */
                 actions?: string;
-                /** @description Comma-separated list (blank items dropped). Subresource classes the browser must not load (plural and short aliases accepted, case-insensitive). If omitted, renders block image+font except for screenshot, pdf, actions, or a network_capture of images/fonts; an explicit list replaces that default and `none` (alone) blocks nothing. Any value other than `none` is browser-only. If omitted, the project's stored default applies. */
+                /** @description Comma-separated list (blank items dropped). Subresource classes the browser must not load (plural and short aliases accepted, case-insensitive). If omitted, full-browser rendering blocks nothing, so images and fonts load, including for screenshot, pdf, actions and anti-bot escalation. A list blocks exactly the classes named and `none` (alone) blocks nothing. Any value other than `none` is browser-only. If omitted, the project's stored default applies. */
                 block_resources?: ("none" | "document" | "documents" | "stylesheet" | "stylesheets" | "css" | "image" | "images" | "media" | "font" | "fonts" | "script" | "scripts" | "js" | "xhr" | "fetch" | "websocket" | "websockets" | "other")[];
-                /** @description false runs the browser on a real display (1920x1080 screen instead of 800x600); only engine=chromium supports it, anything else is 400 ERR::REQUEST::CAPABILITY_UNSUPPORTED at 0 credits. Either value requires a browser engine; omit to use the deployment default (headless). Headful renders skip the warm pool and add ~1s. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?headless` means true. */
+                /**
+                 * @deprecated
+                 * @description Deprecated and ignored. Rendering is chosen automatically. Accepted so existing clients keep working. The response carries `X-Warning: ENGINE_IGNORED`.
+                 */
                 headless?: boolean;
-                /** @description Capture a screenshot; forces the JSON envelope (image base64 under `screenshots`). Needs a rasterising engine (camoufox or chromium) - otherwise 400 ERR::REQUEST::CAPABILITY_UNSUPPORTED at 0 credits. mode=auto cannot satisfy it (its fetch rung has no rasteriser). If the image is not delivered the page is still returned but charged 0. Accepts true/false/1/0; a bare `?screenshot` means true. */
+                /** @description Capture a screenshot; forces the JSON envelope (image base64 under `screenshots`). Rendered with full-browser rendering - on a deployment without it, 400 ERR::REQUEST::CAPABILITY_UNSUPPORTED at 0 credits. mode=auto cannot satisfy it (its fetch rung has no rasteriser). If the image is not delivered the page is still returned but charged 0. Accepts true/false/1/0; a bare `?screenshot` means true. */
                 screenshot?: boolean;
                 /** @description Capture the full scrollable page. Requires screenshot=true; mutually exclusive with screenshot_selector. Accepts true/false/1/0; a bare `?screenshot_fullpage` means true. */
                 screenshot_fullpage?: boolean;
@@ -2908,9 +2935,9 @@ export interface operations {
                 exclude_tags?: string[];
                 /** @description When the target returns a PDF and markdown/text is requested, parse it to text. false refuses it with 502 ERR::EXTRACT::FAILED (0 credits); response_format=html always returns the raw bytes. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?parse_pdf` means true. */
                 parse_pdf?: boolean;
-                /** @description Body shape: html/markdown/text return the document itself, json the envelope, pdf a browser-printed PDF (needs camoufox or chromium). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies. */
+                /** @description Body shape: html/markdown/text return the document itself, json the envelope, pdf a PDF printed by a real browser (needs full-browser rendering). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies. */
                 response_format?: "html" | "markdown" | "text" | "json" | "pdf";
-                /** @description Serve a stored result younger than cache_ttl (Cache-State: hit, 0 credits). Only billable successes of GET-method requests without session_id or actions are stored. Set false for time-sensitive data; cache=false with cache_ttl>0 is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Accepts true/false/1/0; a bare `?cache` means true. */
+                /** @description Serve a stored result younger than cache_ttl (Cache-State: hit). A hit is billed at the same price as the fetch that stored it: the cache saves the fetch (latency and load on the target), not credits. Only billable successes of GET-method requests without session_id or actions are stored. Set false for time-sensitive data; cache=false with cache_ttl>0 is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Accepts true/false/1/0; a bare `?cache` means true. */
                 cache?: boolean;
                 /** @description Maximum acceptable age of a cached result, in seconds. Default and cap are deployment settings (48h by default); larger values are clamped with X-Warning CACHE_TTL_CLAMPED. 0 disables caching for this request. */
                 cache_ttl?: number;
@@ -2942,14 +2969,14 @@ export interface operations {
                 headers: {
                     /** @description Request id (ULID). Quote it in support requests. */
                     "X-Request-Id"?: string;
-                    /** @description Credits actually billed; 0 on any failure, cache hit, or non-billable target status. */
+                    /** @description Credits actually billed; 0 on any failure or non-billable target status. A cache hit is billed at the same price as the fetch that stored it. */
                     "X-Credits-Charged"?: number;
-                    /** @description Price of the engine/proxy tier that ran (0 on a cache hit). Differs from X-Credits-Charged exactly when nothing was billed. */
+                    /** @description Price of the rendering/proxy tier that ran (on a cache hit, the tier that fetched the stored copy). Differs from X-Credits-Charged exactly when nothing was billed. */
                     "X-Request-Cost"?: number;
                     /** @description Whole credits (rounded down) left in the organization's monthly allowance after this request's charge. Read from the enforced counter, so it also counts credits held for in-flight work (running batch jobs, open browser sessions). Never negative. Absent when the organization has no ceiling or the counter could not be read. */
                     "X-Credits-Remaining"?: number;
-                    /** @description Engine that ran. */
-                    "X-Engine"?: "fetch" | "obscura" | "camoufox" | "chromium";
+                    /** @description The rendering tier used, or the last one attempted - `fetch` (HTTP only), `js` (JavaScript rendering) or `browser` (full-browser rendering). After an escalation (mode=auto, or a bot challenge escalated to stronger rendering), the tier that served the page. */
+                    "X-Engine"?: "fetch" | "js" | "browser";
                     /** @description Whose exit carried the request. */
                     "X-Proxy-Source"?: "pool" | "custom" | "direct";
                     /** @description The site's HTTP status. Absent when no document was retrieved. */
@@ -2958,11 +2985,11 @@ export interface operations {
                     "X-Proxy-Endpoint"?: string;
                     /** @description URL after redirects, when known. */
                     "X-Final-Url"?: string;
-                    /** @description Requests per second allowed for this key/org. */
+                    /** @description Size of the key's rate-limit bucket, the most requests that can be sent back to back. */
                     "X-RateLimit-Limit"?: number;
-                    /** @description Tokens left in the bucket. */
+                    /** @description Requests left in that bucket. Never above `X-RateLimit-Limit`. */
                     "X-RateLimit-Remaining"?: number;
-                    /** @description Seconds until retry is allowed; only sent when the limiter imposed a wait. */
+                    /** @description Seconds until the bucket has one request available again; only sent when the limiter imposed a wait. */
                     "X-RateLimit-Reset"?: number;
                     /** @description Concurrent in-flight requests allowed for the organization. */
                     "Concurrency-Limit"?: number;
@@ -2970,7 +2997,7 @@ export interface operations {
                     "Concurrency-Remaining"?: number;
                     /** @description Result-cache outcome. */
                     "Cache-State"?: "hit" | "miss" | "bypass";
-                    /** @description Repeated, one per advisory, formatted `CODE: message`. Codes: PROXY_FLAG_IGNORED, FORMAT_COERCED, CACHE_TTL_CLAMPED, ENGINE_SUBSTITUTED, RENDER_DEGRADED, ESCALATED. */
+                    /** @description Repeated, one per advisory, formatted `CODE: message`. Codes: PROXY_FLAG_IGNORED, FORMAT_COERCED, CACHE_TTL_CLAMPED, ENGINE_SUBSTITUTED (`served by JavaScript rendering` or `browser rendering`), ENGINE_IGNORED, RENDER_DEGRADED, EMPTY_RENDER (the render found no visible content and nothing was charged), ESCALATED (one per abandoned tier, naming the tier, its price and why: `ESCALATED: JavaScript rendering (3 credits): blocked by challenge page (Cloudflare …)`). */
                     "X-Warning"?: string;
                     [name: string]: unknown;
                 };
@@ -3014,14 +3041,14 @@ export interface operations {
                 headers: {
                     /** @description Request id (ULID). Quote it in support requests. */
                     "X-Request-Id"?: string;
-                    /** @description Credits actually billed; 0 on any failure, cache hit, or non-billable target status. */
+                    /** @description Credits actually billed; 0 on any failure or non-billable target status. A cache hit is billed at the same price as the fetch that stored it. */
                     "X-Credits-Charged"?: number;
-                    /** @description Price of the engine/proxy tier that ran (0 on a cache hit). Differs from X-Credits-Charged exactly when nothing was billed. */
+                    /** @description Price of the rendering/proxy tier that ran (on a cache hit, the tier that fetched the stored copy). Differs from X-Credits-Charged exactly when nothing was billed. */
                     "X-Request-Cost"?: number;
                     /** @description Whole credits (rounded down) left in the organization's monthly allowance after this request's charge. Read from the enforced counter, so it also counts credits held for in-flight work (running batch jobs, open browser sessions). Never negative. Absent when the organization has no ceiling or the counter could not be read. */
                     "X-Credits-Remaining"?: number;
-                    /** @description Engine that ran. */
-                    "X-Engine"?: "fetch" | "obscura" | "camoufox" | "chromium";
+                    /** @description The rendering tier used, or the last one attempted - `fetch` (HTTP only), `js` (JavaScript rendering) or `browser` (full-browser rendering). After an escalation (mode=auto, or a bot challenge escalated to stronger rendering), the tier that served the page. */
+                    "X-Engine"?: "fetch" | "js" | "browser";
                     /** @description Whose exit carried the request. */
                     "X-Proxy-Source"?: "pool" | "custom" | "direct";
                     /** @description The site's HTTP status. Absent when no document was retrieved. */
@@ -3030,11 +3057,11 @@ export interface operations {
                     "X-Proxy-Endpoint"?: string;
                     /** @description URL after redirects, when known. */
                     "X-Final-Url"?: string;
-                    /** @description Requests per second allowed for this key/org. */
+                    /** @description Size of the key's rate-limit bucket, the most requests that can be sent back to back. */
                     "X-RateLimit-Limit"?: number;
-                    /** @description Tokens left in the bucket. */
+                    /** @description Requests left in that bucket. Never above `X-RateLimit-Limit`. */
                     "X-RateLimit-Remaining"?: number;
-                    /** @description Seconds until retry is allowed; only sent when the limiter imposed a wait. */
+                    /** @description Seconds until the bucket has one request available again; only sent when the limiter imposed a wait. */
                     "X-RateLimit-Reset"?: number;
                     /** @description Concurrent in-flight requests allowed for the organization. */
                     "Concurrency-Limit"?: number;
@@ -3042,7 +3069,7 @@ export interface operations {
                     "Concurrency-Remaining"?: number;
                     /** @description Result-cache outcome. */
                     "Cache-State"?: "hit" | "miss" | "bypass";
-                    /** @description Repeated, one per advisory, formatted `CODE: message`. Codes: PROXY_FLAG_IGNORED, FORMAT_COERCED, CACHE_TTL_CLAMPED, ENGINE_SUBSTITUTED, RENDER_DEGRADED, ESCALATED. */
+                    /** @description Repeated, one per advisory, formatted `CODE: message`. Codes: PROXY_FLAG_IGNORED, FORMAT_COERCED, CACHE_TTL_CLAMPED, ENGINE_SUBSTITUTED (`served by JavaScript rendering` or `browser rendering`), ENGINE_IGNORED, RENDER_DEGRADED, EMPTY_RENDER (the render found no visible content and nothing was charged), ESCALATED (one per abandoned tier, naming the tier, its price and why: `ESCALATED: JavaScript rendering (3 credits): blocked by challenge page (Cloudflare …)`). */
                     "X-Warning"?: string;
                     [name: string]: unknown;
                 };
@@ -3399,8 +3426,8 @@ export interface operations {
             query?: {
                 /** @description Page size. Out-of-range or non-integer values are refused with 400, not clamped. */
                 limit?: number;
-                /** @description Only sessions pinned to this engine. Case-insensitive. */
-                engine?: "fetch" | "obscura" | "chromium" | "camoufox";
+                /** @description Optional. Only sessions bound to this rendering tier. */
+                engine?: "fetch" | "js" | "browser";
                 /** @description Only sessions whose clock-derived status matches. Case-insensitive. Filtered after the read; see the operation description. */
                 status?: "active" | "released" | "expired";
                 /** @description The `next_cursor` from the previous page, passed back verbatim. A value this API did not issue is refused with 400. */
@@ -3598,15 +3625,15 @@ export interface operations {
                 apikey?: string;
                 /** @description Alias for `apikey`, consulted only when `apikey` is absent or blank. */
                 api_key?: string;
-                /** @description Which browser serves the session. Case-insensitive. `fetch` and `camoufox` are refused with 400 because neither speaks CDP. Omitted means the deployment default, `chromium`. */
-                engine?: "chromium" | "obscura";
+                /** @description Optional. The rendering tier of the cloud browser - `browser` (default; full browser, full protocol) or `js` (lighter JavaScript rendering with a smaller protocol surface). `fetch` runs no browser and is refused with 400. A tier the plan does not include is 403 `ERR::AUTH::ENGINE_NOT_ENTITLED`; one the deployment lacks is 501 `ERR::ENGINE::UNAVAILABLE`. */
+                engine?: "browser" | "js";
                 /** @description Broad exit region such as `eu`. Case-insensitive. `global` means no constraint and is the same as omitting it. Cannot be combined with `proxy_country`. */
                 proxy_region?: string;
                 /** @description Exit country as a two-letter ISO 3166-1 alpha-2 code (case-insensitive, normalised to lowercase). Combining it with a non-`global` `proxy_region` is refused with 400 `ERR::REQUEST::INCOMPATIBLE_FLAGS`. */
                 proxy_country?: string;
                 /** @description Hard session lifetime in whole seconds. Out-of-range values are refused, not clamped. When it elapses the socket is closed even mid-command. */
                 session_ttl?: number;
-                /** @description `true`/`1` or `false`/`0` (case-insensitive); anything else is 400. Omitted defers to the deployment. `false` attaches a display. `headless=false` with `engine=obscura` is refused with 400 `ERR::REQUEST::INCOMPATIBLE_FLAGS`. */
+                /** @description Optional and legacy. The display mode is chosen automatically; leave it out. If sent, it is `true`/`1` or `false`/`0` (case-insensitive); anything else is 400. */
                 headless?: "true" | "false" | "1" | "0";
                 /** @description Pins the exit for the session. 2-64 letters, digits and hyphens; no underscores. Omitted means the exit rotates, the opposite of `/v1/sessions`. */
                 sticky_key?: string;
@@ -3666,8 +3693,11 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    /** @enum {string} */
-                    engine?: "chromium" | "obscura";
+                    /**
+                     * @default browser
+                     * @enum {string}
+                     */
+                    engine?: "browser" | "js";
                     proxy_country?: string;
                     proxy_region?: string;
                     sticky_key?: string;

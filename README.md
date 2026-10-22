@@ -52,7 +52,7 @@ It prints the page as Markdown, then the target site's status, the engine that r
 ## Features
 
 - **5 output formats** from one call: HTML, Markdown, plain text, PDF, or a JSON envelope with extracted `data`.
-- **JavaScript rendering** with `js_render: true`, a real Chromium with `engine: "chromium"`, or `mode: "auto"`, which escalates from a plain fetch only when needed and bills only the step that worked.
+- **JavaScript rendering** with `js_render: true`, or `mode: "auto"`, which escalates from a plain fetch only when needed and bills only the step that worked.
 - **Structured data extraction** with CSS selectors, XPath, a typed JSON Schema, or page metadata (JSON-LD, OpenGraph), at no extra credits.
 - **Screenshots and PDFs** of a full page or a single element.
 - **Batch jobs of up to 10,000 URLs per call** (100,000 per open job), with results streamed as JSON Lines.
@@ -88,7 +88,7 @@ A site answering 404 or 403 is a successful call, not an error. The SDK throws o
 | `format` | `body` | When |
 |---|---|---|
 | `html`, `markdown`, `text` | `string` | `response_format` is `html` (default), `markdown` or `text` |
-| `pdf` | `ArrayBuffer` | `response_format: "pdf"` with `engine: "chromium"` |
+| `pdf` | `ArrayBuffer` | `response_format: "pdf"` |
 | `json` | `string`, plus a parsed `envelope` | `json`, or any of `extract`, `links`, `screenshot`, `autoparse`, `network_capture` |
 
 ```ts
@@ -122,21 +122,20 @@ console.log(product.data, product.empty_fields); // empty_fields: selectors that
 
 ## Take a screenshot or save a page as PDF
 
-Screenshots and PDFs need a browser that can draw the page, so set `engine: "chromium"`. Images arrive base64-encoded in `screenshots`:
+Screenshots and PDFs need full-browser rendering. You do not choose it: Spicrawl routes the request there for you (8 credits). Images arrive base64-encoded in `screenshots`:
 
 ```ts
 import { writeFile } from "node:fs/promises";
 
 const shot = await spicrawl.scrape({
   url: "https://example.com",
-  engine: "chromium",
   screenshot: true,
   screenshot_fullpage: true, // or screenshot_selector: "#chart"
 });
 const img = shot.screenshots?.[0];
 if (img) await writeFile("page.png", Buffer.from(img.data, "base64"));
 
-const pdf = await spicrawl.scrapeRaw({ url: "https://example.com", engine: "chromium", response_format: "pdf" });
+const pdf = await spicrawl.scrapeRaw({ url: "https://example.com", response_format: "pdf" });
 if (pdf.format === "pdf") await writeFile("page.pdf", Buffer.from(pdf.body));
 ```
 
@@ -398,7 +397,7 @@ for (const call of completion.choices[0].message.tool_calls ?? []) {
 
 ### Is Spicrawl free?
 
-Spicrawl bills credits per successful request, and every organization gets a monthly credit allowance: during the beta, one plan of 1,000 credits per month. A plain fetch costs 1 credit, `js_render` 3 and `engine: "chromium"` 8; failed requests cost 0. See [Credits](https://docs.spicrawl.com/credits).
+Spicrawl bills credits per successful request, and every organization gets a monthly credit allowance: during the beta, one plan of 1,000 credits per month. A plain fetch costs 1 credit, `js_render` 3 and full-browser rendering (screenshots, PDF, `actions`) 8; failed requests cost 0. See [Credits](https://docs.spicrawl.com/credits).
 
 ### Are cached results free?
 
@@ -406,7 +405,7 @@ No. A cache hit is billed at the same price as the fetch that stored it; the cac
 
 ### Does it render JavaScript?
 
-Yes. Set `js_render: true` for a JavaScript-capable engine, `engine: "chromium"` for a real Chromium, or `mode: "auto"` to escalate from a plain fetch only when needed; `wait_for` waits for a CSS selector.
+Yes. Set `js_render: true` for JavaScript rendering, or `mode: "auto"` to escalate from a plain fetch only when needed (screenshots, PDF and `actions` use full-browser rendering, which Spicrawl picks for you); `wait_for` waits for a CSS selector.
 
 ### Why didn't my scrape throw when the site returned 404?
 

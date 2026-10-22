@@ -33,7 +33,7 @@
     "structured-data",
     "json-schema",
     "javascript-rendering",
-    "headless-browser",
+    "browser-rendering",
     "screenshot",
     "pdf",
     "batch-scraping"
