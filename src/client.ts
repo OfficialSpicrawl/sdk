@@ -1,10 +1,11 @@
 import { Transport, type ClientOptions, type RequestOptions } from "./core.js";
 import { Batch } from "./resources/batch.js";
 import { Browser } from "./resources/browser.js";
+import { Partner } from "./resources/partner.js";
 import { Requests } from "./resources/requests.js";
 import { Sessions } from "./resources/sessions.js";
 import { Usage } from "./resources/usage.js";
-import type { ResponseFormat, ResponseMeta, ScrapeEnvelope, ScrapeRequest, WithMeta } from "./types.js";
+import type { KeyInfo, ResponseFormat, ResponseMeta, ScrapeEnvelope, ScrapeRequest, WithMeta } from "./types.js";
 
 /** Params for `scrape()`: everything except a non-JSON `response_format`. */
 export type ScrapeParams = Omit<ScrapeRequest, "response_format"> & { response_format?: "json" };
@@ -53,6 +54,8 @@ export class Spicrawl {
   readonly usage: Usage;
   /** Remote browser — coming soon. */
   readonly browser: Browser;
+  /** Partner accounts: workspaces for your end users, one shared balance, tiers. Partner keys only. */
+  readonly partner: Partner;
 
   constructor(options: ClientOptions = {}) {
     this._transport = new Transport(options);
@@ -61,10 +64,16 @@ export class Spicrawl {
     this.requests = new Requests(this._transport);
     this.usage = new Usage(this._transport);
     this.browser = new Browser(this._transport);
+    this.partner = new Partner(this._transport);
   }
 
   get baseURL(): string {
     return this._transport.baseURL;
+  }
+
+  /** What the calling key is: its scopes, environment and organization. Any valid key may call it. */
+  key(opts?: RequestOptions): Promise<WithMeta<KeyInfo>> {
+    return this._transport.json({ method: "GET", path: "/v1/key" }, opts);
   }
 
   /**

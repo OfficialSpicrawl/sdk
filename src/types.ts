@@ -68,6 +68,33 @@ export type BrowserTokenRequest = NonNullable<
 export type BrowserToken = operations["browserToken"]["responses"][200]["content"]["application/json"];
 export type BrowserConnectParams = Query<"browserConnect">;
 
+// ---- Partner (partner keys only) -----------------------------------------
+export type PartnerSummary = Schemas["PartnerSummary"];
+export type PartnerWallet = operations["partnerWallet"]["responses"][200]["content"]["application/json"];
+export type PartnerUsage = operations["partnerUsage"]["responses"][200]["content"]["application/json"];
+export type PartnerWorkspaceUsage = operations["partnerWorkspaceUsage"]["responses"][200]["content"]["application/json"];
+export type PartnerUsageTotals = Schemas["PartnerUsageTotals"];
+export type PartnerUsageWorkspace = Schemas["PartnerUsageWorkspace"];
+export type PartnerWorkspace = Schemas["PartnerWorkspace"];
+export type PartnerWorkspaceDetail = Schemas["PartnerWorkspaceDetail"];
+export type PartnerWorkspaceProvisioned = Schemas["PartnerWorkspaceProvisioned"];
+export type PartnerWorkspaceList = Schemas["PartnerWorkspaceList"];
+export type PartnerWorkspaceUpdate = Schemas["PartnerWorkspaceUpdate"];
+export type PartnerWorkspaceProvisionRequest = NonNullable<
+  NonNullable<operations["partnerWorkspaceProvision"]["requestBody"]>["content"]["application/json"]
+>;
+export type PartnerTier = Schemas["PartnerTier"];
+export type PartnerTierList = Schemas["PartnerTierList"];
+export type PartnerTierInput = Schemas["PartnerTierInput"];
+export type PartnerTierPatch = Schemas["PartnerTierPatch"];
+export type PartnerTierAssign = Schemas["PartnerTierAssign"];
+export type PartnerCreditAssignment = Schemas["PartnerCreditAssignment"];
+export type PartnerCreditAssigned = Schemas["PartnerCreditAssigned"];
+export type PartnerUserListParams = Query<"partnerWorkspacesList">;
+export type PartnerUsageParams = Query<"partnerUsage">;
+export type PartnerWorkspaceUsageParams = Query<"partnerWorkspaceUsage">;
+export type KeyInfo = Schemas["KeyInfo"];
+
 // ---- Errors ---------------------------------------------------------------
 export type Problem = Schemas["Problem"];
 export type ProblemDiagnostics = Schemas["ProblemDiagnostics"];
@@ -110,6 +137,7 @@ export const ERROR_CODES = [
   "ERR::LIMIT::QUOTA_EXCEEDED",
   "ERR::LIMIT::MAX_COST_EXCEEDED",
   "ERR::LIMIT::SESSIONS_EXCEEDED",
+  "ERR::LIMIT::PARTNER_WORKSPACE_LIMIT",
   "ERR::UPSTREAM::TIMEOUT",
   "ERR::UPSTREAM::DNS_FAILED",
   "ERR::UPSTREAM::TLS_FAILED",
