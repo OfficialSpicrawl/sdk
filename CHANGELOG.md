@@ -3,7 +3,7 @@
 All notable changes to `@spicrawl/sdk` are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 — 2026-11-23
 
 - **Partner accounts** (`client.partner`) for platforms that resell Spicrawl: `summary()`, `balance()`, `usage()`; `users` (`list` with paging, `create`, `get`, `update`, `suspend`, `reactivate`, `setTier`, `giveCredits`, `usage`); and `tiers` (`list`, `create`, `update`, `delete`). `create` returns the user's API key, a credential: store it, do not log it.
 - `users.giveCredits()` sends an idempotency key, generated when you do not pass one and returned as `idempotency_key`. The SDK retries it with the same key, so a retry cannot move credits twice.
