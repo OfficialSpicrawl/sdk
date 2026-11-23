@@ -50,6 +50,10 @@ tags:
     every project of its organization.
 - name: Usage
   description: Credits and volume over time. Requires the `read` scope.
+- name: Keys
+  description: What the calling API key is.
+- name: Partner
+  description: Provision and manage the workspaces of a partner's end users. Requires the `partner` scope on a partner account's key. Rate limited per partner, 20 requests per second on every partner route (burst 60); the key-returning PUT allows 2 per second (burst 20). A refused call is `429 ERR::LIMIT::RATE_LIMITED` with `Retry-After`.
 - name: Fleet
   description: Deployment capacity and readiness.
 - name: Health
@@ -3678,6 +3682,342 @@ components:
             enum:
             - ok
             - unreachable
+
+    PartnerUsageTotals:
+      type: object
+      required: [requests, requests_failed, credits_micro, credits_wallet_micro, credits_own_micro]
+      properties:
+        requests: {type: integer, format: int64}
+        requests_failed: {type: integer, format: int64}
+        credits_micro: {type: integer, format: int64}
+        credits_wallet_micro: {type: integer, format: int64, description: The part of the charge paid from the partner wallet.}
+        credits_own_micro: {type: integer, format: int64, description: The part of the charge paid from the workspace's own balance.}
+    PartnerUsageWorkspace:
+      allOf:
+      - $ref: '#/components/schemas/PartnerUsageTotals'
+      - type: object
+        required: [external_user_id]
+        properties:
+          external_user_id: {type: string}
+    PartnerWorkspace:
+      type: object
+      required: [workspace_id, external_user_id, status, created_at, free_credits]
+      properties:
+        workspace_id:
+          type: string
+          description: The workspace's organization id.
+        external_user_id:
+          type: string
+        display_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+          description: 'The name the partner gave this user, shown to the partner only. Set on create or with PATCH; null when unset.'
+        status:
+          type: string
+          enum: [active, suspended, closed, deleted]
+          description: |
+            `deleted` when the workspace has been soft-deleted by Spicrawl support. A deleted workspace keeps
+            its `external_user_id` but cannot be served; `PUT` on it is `409` and returns no key.
+        created_at:
+          type: string
+          format: date-time
+        free_credits:
+          type: integer
+          description: The workspace's monthly allowance, in whole credits, as set for the partner.
+        wallet_cap:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: |
+            The most this workspace may draw from the partner's shared wallet in one allowance month, in whole
+            credits. Its own setting when Spicrawl set one, else the partner's default. `null` when it has no
+            cap. Free credits and the workspace's own balance are not counted against it. A request that would
+            need more than the cap left is refused with `402 ERR::LIMIT::QUOTA_EXCEEDED` ("...reached its spending
+            limit for this month..."). A cap change reaches requests within about 5 seconds.
+        tier:
+          type: object
+          nullable: true
+          required: [id, name]
+          properties:
+            id: {type: string}
+            name: {type: string}
+          description: The tier the workspace is on, or `null` when it has none.
+        requests_per_minute:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: The tier's requests per minute for this user's scrape and browser requests, or `null` when there is no tier.
+        concurrency:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: The tier's requests and browser sessions a user may run at once, or `null` when there is no tier.
+        wallet_cap_source:
+          type: string
+          enum: [tier, workspace, account_default, none]
+          description: |
+            Where `wallet_cap` comes from. `tier`: the workspace's tier sets it. `workspace`: Spicrawl set it on
+            this workspace while it is on no tier. `account_default`: the partner's default (a tier with no cap
+            falls back to it). `none`: no cap.
+        window_resets_at:
+          type: string
+          format: date-time
+          description: When the workspace's current allowance month ends (its monthly anniversary), RFC 3339 UTC.
+        wallet_used:
+          type: [integer, 'null']
+          minimum: 0
+          description: |
+            Whole credits this user has drawn from the partner's balance in its current allowance month (floor).
+            Compare with `wallet_cap`. Null on responses that do not compute it (`PUT`, suspend, reactivate) and
+            when it cannot be read.
+        wallet_used_source:
+          type: [string, 'null']
+          enum: [live, rollup, null]
+          description: |
+            `live` when read from the live cap counter, which is current. `rollup` when read from usage records,
+            which trails by about 60 seconds. Null when `wallet_used` is null.
+        free_used:
+          type: [integer, 'null']
+          minimum: 0
+          description: Whole free credits this user has used in its current allowance month (floor). Null on responses that do not compute it.
+        own_credits:
+          type: [integer, 'null']
+          minimum: 0
+          description: |
+            Credits the partner gave this user that remain unspent, in whole credits (floor). The single `GET`
+            reads it live; the list reads usage records, so it can trail by about 60 seconds. Null on responses that
+            do not compute it, and when it cannot be read.
+    PartnerWorkspaceDetail:
+      allOf:
+      - $ref: '#/components/schemas/PartnerWorkspace'
+      description: The single-workspace read. Same fields as `PartnerWorkspace`; kept as a name for existing clients of the spec.
+    PartnerWorkspaceUpdate:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+          description: 'The new display name, or null to clear it.'
+    PartnerTier:
+      type: object
+      required: [id, name, requests_per_minute, concurrency, free_credits, wallet_cap, default, workspaces, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          description: Spicrawl's id for the tier.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: Unique among the partner's tiers, ignoring case.
+        requests_per_minute:
+          type: integer
+          minimum: 1
+          description: Requests per minute a user may make to scrape, and cloud browser sessions a user may start. Cannot exceed the partner's ceiling (60 times its requests per second).
+        concurrency:
+          type: integer
+          minimum: 1
+          description: Requests and browser sessions a user may run at once. Cannot exceed the partner's concurrency limit.
+        free_credits:
+          type: integer
+          minimum: 0
+          description: Free credits per user per month, in whole credits. Cannot exceed the free credits Spicrawl grants the partner per workspace.
+        wallet_cap:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: Most credits per user per month the user may draw from the partner's balance. `null` means the tier sets no cap; a partner default then applies.
+        default:
+          type: boolean
+          description: True on the one tier new workspaces start on.
+        workspaces:
+          type: integer
+          minimum: 0
+          description: Live workspaces on this tier.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PartnerTierList:
+      type: object
+      required: [tiers]
+      properties:
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerTier'
+    PartnerTierInput:
+      type: object
+      required: [name, requests_per_minute, concurrency, free_credits]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 60, description: 'Trimmed before it is stored.'}
+        requests_per_minute: {type: integer, minimum: 1}
+        concurrency: {type: integer, minimum: 1}
+        free_credits: {type: integer, minimum: 0}
+        wallet_cap: {type: integer, nullable: true, minimum: 0, maximum: 100000000}
+        default: {type: boolean, description: 'Makes this tier the default. Ignored for the partner''s first tier, which is always the default.'}
+    PartnerTierPatch:
+      type: object
+      description: Any subset of the `PartnerTierInput` fields. `default` may only be `true`.
+      properties:
+        name: {type: string, minLength: 1, maxLength: 60}
+        requests_per_minute: {type: integer, minimum: 1}
+        concurrency: {type: integer, minimum: 1}
+        free_credits: {type: integer, minimum: 0}
+        wallet_cap: {type: integer, nullable: true, minimum: 0, maximum: 100000000}
+        default: {type: boolean, enum: [true]}
+    PartnerTierAssign:
+      type: object
+      required: [tier]
+      properties:
+        tier:
+          type: string
+          description: The tier's id or its name.
+    PartnerCreditAssignment:
+      type: object
+      required: [credits, idempotency_key]
+      properties:
+        credits:
+          type: integer
+          minimum: 1
+          maximum: 100000000
+          description: Whole credits to move from the partner's balance to the user's own balance. At most the partner's balance (funded less spent); the credit line cannot be assigned.
+        idempotency_key:
+          type: string
+          pattern: '^\S{8,100}$'
+          description: 8 to 100 characters, no spaces. Use a new key for each assignment; a repeat with the same key changes nothing.
+    PartnerCreditAssigned:
+      type: object
+      required: [external_user_id, credits, applied, user_credits, balance_available]
+      properties:
+        external_user_id: {type: string}
+        credits: {type: integer, format: int64}
+        applied:
+          type: boolean
+          description: False when the idempotency key was used before. Nothing changed.
+        user_credits:
+          type: integer
+          format: int64
+          description: The user's own assigned balance left, in whole credits.
+        balance_available:
+          type: integer
+          format: int64
+          description: The partner's assignable balance (funded less spent, floored at zero, credit line excluded) after this assignment, in whole credits. The name is kept for compatibility.
+    PartnerWorkspaceProvisioned:
+      allOf:
+      - $ref: '#/components/schemas/PartnerWorkspace'
+      - type: object
+        required: [created, api_key]
+        properties:
+          created:
+            type: boolean
+            description: True when this call created the workspace.
+          api_key:
+            type: string
+            description: The workspace's default API key, in full. Normally the same on every call; a new one is issued if the stored key has expired or can no longer be read. Store the latest one; it is the workspace's credential.
+    PartnerWorkspaceList:
+      type: object
+      required: [workspaces]
+      properties:
+        workspaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerWorkspace'
+        next_after:
+          type: string
+          description: Present when the page is full and `sort` is `external_user_id`. Pass it as `after` to read on.
+        next_offset:
+          type: integer
+          description: Present when the page is full and `sort` is `wallet_used`. Pass it as `offset` to read on.
+    PartnerSummary:
+      type: object
+      required: [partner, org_id, free_credits, workspace_daily_limit, workspace_count, limits, users, caps, balance]
+      properties:
+        partner: {type: boolean, description: Always true for a partner account.}
+        org_id: {type: string, format: uuid}
+        free_credits:
+          type: integer
+          description: The partner's default monthly allowance per workspace, in whole credits.
+        workspace_daily_limit:
+          type: integer
+          description: New workspaces the partner may create per UTC day.
+        workspace_count:
+          type: integer
+          description: Workspaces the partner has created, deleted ones included.
+        limits:
+          type: object
+          required: [max_requests_per_minute, max_concurrency, max_free_credits]
+          properties:
+            max_requests_per_minute: {type: integer}
+            max_concurrency: {type: integer}
+            max_free_credits: {type: integer, description: Whole credits. The most a tier may grant per workspace.}
+        users:
+          type: object
+          required: [total, active, suspended]
+          description: Workspaces not deleted. `total` also counts closed ones, which are in neither `active` nor `suspended`.
+          properties:
+            total: {type: integer}
+            active: {type: integer}
+            suspended: {type: integer}
+        caps:
+          type: object
+          required: [committed, uncapped_users]
+          description: Over active workspaces only.
+          properties:
+            committed:
+              type: integer
+              description: Sum of the effective monthly cap of each active workspace that has one, each floored to whole credits.
+            uncapped_users:
+              type: integer
+              description: Active workspaces with no effective cap. They are not in `committed`.
+        balance:
+          type: object
+          description: The same figures as `GET /v1/partner/wallet`. Only `balance_credits` can be assigned to users.
+          required: [funded_credits, credit_line_credits, spent_credits, balance_credits, available_credits]
+          properties:
+            funded_credits: {type: integer}
+            credit_line_credits: {type: integer}
+            spent_credits: {type: integer}
+            balance_credits: {type: integer, description: What has been added, less what users have spent. The most that can be given to users.}
+            available_credits: {type: integer, description: Balance plus credit line.}
+            funded_micro: {type: integer, format: int64}
+            credit_line_micro: {type: integer, format: int64}
+            spent_micro: {type: integer, format: int64}
+            balance_micro: {type: integer, format: int64}
+            available_micro: {type: integer, format: int64}
+    KeyInfo:
+      type: object
+      required: [key_id, name, prefix, scopes, environment, organization, partner, created_at]
+      description: What the calling key is. Never the secret or its hash.
+      properties:
+        key_id: {type: string, format: uuid}
+        name: {type: string}
+        prefix: {type: string, description: The display prefix, e.g. `spicrawl_live_a1b2`.}
+        scopes:
+          type: array
+          items: {type: string}
+        environment:
+          type: string
+          enum: [live, test]
+        organization:
+          type: object
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        partner:
+          type: boolean
+          description: True when the key's organization is a partner account.
+        created_at: {type: string, format: date-time}
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+
   responses:
     BadRequest:
       description: The request is invalid. Not retryable; fix the request using `code` and `diagnostics.hint`.
@@ -6772,6 +7112,770 @@ paths:
           $ref: '#/components/responses/ServerError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /v1/partner/summary:
+    get:
+      tags:
+      - Partner
+      operationId: partnerSummary
+      summary: The partner's account at a glance
+      description: |
+        The partner's allowance, its users and caps, and its balance (the same figures as `GET /v1/partner/wallet`
+        under `balance`), in one call. `users` and `caps` are computed in one statement from the partner's
+        workspaces: `caps.committed` is the sum of the effective cap of each active workspace that has one, and
+        `caps.uncapped_users` counts the active ones that have none.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '200':
+          description: The partner's summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/key:
+    get:
+      tags:
+      - Keys
+      operationId: keyInfo
+      summary: What this API key is
+      description: |
+        Returns the key's id, name, prefix, scopes, environment, organization, and whether the organization is a
+        partner account or a partner's workspace. Any valid key may call it; no scope is needed. The secret and
+        its hash are never returned. `Cache-Control: no-store`.
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: The key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/usage:
+    get:
+      tags:
+      - Partner
+      operationId: partnerUsage
+      summary: The partner's usage across its workspaces
+      description: |
+        Usage summed over the partner's child workspaces. `group_by=day` gives one row per UTC day;
+        `group_by=workspace` gives one row per workspace, named by `external_user_id`, and pages it.
+        The window is `from` (inclusive) to `to` (exclusive), default the last 30 days, at most 400 days.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        description: Exclusive.
+        schema:
+          type: string
+          format: date
+      - name: group_by
+        in: query
+        schema:
+          type: string
+          enum: [day, workspace]
+          default: day
+      - name: sort
+        in: query
+        description: Workspace grouping only. Descending, ties broken by external_user_id.
+        schema:
+          type: string
+          enum: [credits, requests, fail_rate, last_active]
+          default: credits
+      - name: limit
+        in: query
+        description: Workspace grouping only, 1 to 200.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: offset
+        in: query
+        description: Workspace grouping only.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: q
+        in: query
+        description: Workspace grouping only. A prefix of external_user_id.
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: The partner's usage.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [period, group_by, totals, rows]
+                properties:
+                  period:
+                    type: object
+                    properties:
+                      start: {type: string, format: date}
+                      end: {type: string, format: date, description: Exclusive.}
+                      bounds: {type: string, example: '[start, end)'}
+                      days: {type: integer}
+                  group_by:
+                    type: string
+                    enum: [day, workspace]
+                  totals:
+                    $ref: '#/components/schemas/PartnerUsageTotals'
+                  rows:
+                    description: '`day` rows carry the totals fields plus `day`; `workspace` rows are PartnerUsageWorkspace.'
+                    type: array
+                    items:
+                      type: object
+                  page:
+                    description: Present for group_by=workspace.
+                    type: object
+                    properties:
+                      total: {type: integer}
+                      limit: {type: integer}
+                      offset: {type: integer}
+                      next_offset: {type: integer, nullable: true}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/workspaces/{external_user_id}/usage:
+    get:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceUsage
+      summary: One workspace's usage
+      description: Totals and one row per UTC day for a workspace of this partner. A deleted workspace is not found.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      parameters:
+      - name: external_user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          pattern: '^[A-Za-z0-9._:-]{1,128}$'
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        description: Exclusive.
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The workspace's usage.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [external_user_id, period, totals, rows]
+                properties:
+                  external_user_id: {type: string}
+                  period: {type: object}
+                  totals:
+                    $ref: '#/components/schemas/PartnerUsageTotals'
+                  rows:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/wallet:
+    get:
+      tags:
+      - Partner
+      operationId: partnerWallet
+      summary: The partner wallet
+      description: |
+        `spent` is the all-time wallet charge across the partner's workspaces, `balance` is funded less spent,
+        and `available` is balance plus the credit line. The `*_credits` fields are the same values in whole credits.
+        Only `balance` can be assigned to users; the credit line cannot.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '200':
+          description: The wallet.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [funded_micro, credit_line_micro, spent_micro, balance_micro, available_micro]
+                properties:
+                  funded_micro: {type: integer, format: int64}
+                  credit_line_micro: {type: integer, format: int64}
+                  spent_micro: {type: integer, format: int64}
+                  balance_micro: {type: integer, format: int64}
+                  available_micro: {type: integer, format: int64}
+                  funded_credits: {type: integer, format: int64}
+                  credit_line_credits: {type: integer, format: int64}
+                  spent_credits: {type: integer, format: int64}
+                  balance_credits: {type: integer, format: int64}
+                  available_credits: {type: integer, format: int64}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/workspaces:
+    get:
+      tags:
+      - Partner
+      operationId: partnerWorkspacesList
+      summary: List the partner's workspaces
+      description: |
+        Pages the workspaces this partner provisioned. Items carry no `api_key`. Each item has its usage figures
+        (see `PartnerWorkspace`). `sort=external_user_id` (the default) pages by keyset: `next_after` is present
+        when the page is full; pass it as `after`. `sort=wallet_used` orders by the wallet-paid spend this window,
+        largest first, and pages by `offset`: `next_offset` is present when the page is full. The wallet sort is
+        on the usage records figure, which trails the live one by about 60 seconds; it reads every workspace of the
+        partner, so it costs more than the default sort.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      parameters:
+      - name: limit
+        in: query
+        description: Page size, 1 to 200.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: after
+        in: query
+        description: The `next_after` of the previous page. Only with `sort=external_user_id`.
+        schema:
+          type: string
+          maxLength: 128
+          pattern: '^[A-Za-z0-9._:-]{1,128}$'
+      - name: q
+        in: query
+        description: Case-sensitive prefix of `external_user_id`. Matches all when absent.
+        schema:
+          type: string
+          maxLength: 128
+          pattern: '^[A-Za-z0-9._:-]{1,128}$'
+      - name: sort
+        in: query
+        description: '`external_user_id` (default) or `wallet_used` (descending by this window''s wallet-paid spend).'
+        schema:
+          type: string
+          enum: [external_user_id, wallet_used]
+          default: external_user_id
+      - name: offset
+        in: query
+        description: Rows to skip. Only with `sort=wallet_used`; `next_offset` of the previous page.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: One page of workspaces.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspaceList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/workspaces/{external_user_id}:
+    parameters:
+    - name: external_user_id
+      in: path
+      required: true
+      description: The partner's own id for the end user.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{1,128}$'
+    put:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceProvision
+      summary: Provision a workspace, or fetch it and its default key
+      description: |
+        Creates the workspace for this end user if it does not exist, makes sure it has its default
+        API key, and returns that key's plaintext. Calling it again is how the key is read again.
+
+        `201` when this call created the workspace, `200` when it already existed. `created` says which.
+        The key is normally the same on every call, but a new one is issued when the stored key has
+        expired or can no longer be read, so store whatever the latest call returned. The response is
+        sent with `Cache-Control: no-store`.
+
+        A partner may create at most a fixed number of workspaces per UTC day. Past that, a new user is
+        `429 ERR::LIMIT::PARTNER_WORKSPACE_LIMIT`. An existing user is never limited.
+
+        A workspace that has been soft-deleted is `409 ERR::REQUEST::CONFLICT` and returns no key: Spicrawl
+        support must restore it first. A closed workspace is `409 ERR::REQUEST::CONFLICT` too, with no key;
+        closure is terminal.
+
+        Rate limit: this route allows 2 requests per second per partner, with bursts of 20, on top of the
+        20-per-second limit every partner route shares.
+
+        The optional body names the tier a new workspace starts on, by id or name. Without it the workspace
+        gets the partner's default tier, or no tier when there is none. An existing workspace keeps its tier,
+        but an unknown tier is `404` either way. Move a workspace with `PUT .../tier`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tier:
+                  type: string
+                  description: The tier's id or name.
+                display_name:
+                  type: [string, 'null']
+                  minLength: 1
+                  maxLength: 100
+                  description: 'Names a new workspace. An existing workspace keeps its name: change it with PATCH.'
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '200':
+          description: The workspace already existed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspaceProvisioned'
+        '201':
+          description: The workspace was created by this call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspaceProvisioned'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          description: |
+            Either the partner's daily allowance of new workspaces is used up (`ERR::LIMIT::PARTNER_WORKSPACE_LIMIT`,
+            `Retry-After` runs to the next 00:00 UTC), or the partner's rate limit for this route is exceeded
+            (`ERR::LIMIT::RATE_LIMITED`, `Retry-After` in seconds).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    get:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceGet
+      summary: Read one workspace
+      description: Returns the workspace without its `api_key`, with its usage figures (`wallet_used`, `free_used`, `own_credits`, `window_resets_at`). `own_credits` is null when the balance cannot be read at that moment. Use `PUT` to read the key.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '200':
+          description: The workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspaceDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceUpdate
+      summary: Set or clear a workspace's display name
+      description: |
+        Sets the workspace's display name (1 to 100 characters), or clears it with `null`. Changes nothing else
+        and returns the workspace without its key.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerWorkspaceUpdate'
+      responses:
+        '200':
+          description: The workspace, with its new name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/workspaces/{external_user_id}/suspend:
+    parameters:
+    - name: external_user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{1,128}$'
+    post:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceSuspend
+      summary: Suspend a workspace
+      description: |
+        Sets the workspace to `suspended` with the reason "suspended by partner". Its key is refused on
+        requests. Idempotent. A workspace already suspended (by the partner or by Spicrawl) is
+        returned as it stands: a suspension by Spicrawl keeps its reason. A closed workspace is
+        `409 ERR::REQUEST::CONFLICT`.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '200':
+          description: The workspace, now suspended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/workspaces/{external_user_id}/reactivate:
+    parameters:
+    - name: external_user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{1,128}$'
+    post:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceReactivate
+      summary: Reactivate a workspace
+      description: |
+        Lifts a suspension the partner made. Idempotent. A closed workspace is `409 ERR::REQUEST::CONFLICT`.
+        A workspace suspended by Spicrawl (a suspension by Spicrawl) is `409 ERR::REQUEST::CONFLICT` with the
+        problem "suspended by Spicrawl; contact support"; it is left suspended.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '200':
+          description: The workspace, now active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/tiers:
+    get:
+      tags:
+      - Partner
+      operationId: partnerTiersList
+      summary: List the partner's tiers
+      description: |
+        The partner's tiers, the default first, then by name. `workspaces` counts the live workspaces on each tier.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '200':
+          description: The tiers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerTierList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Partner
+      operationId: partnerTierCreate
+      summary: Create a tier
+      description: |
+        Creates a tier. `name`, `requests_per_minute`, `concurrency` and `free_credits` are required. The
+        partner's first tier becomes the default whatever `default` says. A value above the partner's ceiling
+        is `400`, and the message gives the bound. A name already used by another tier is `409`.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerTierInput'
+      responses:
+        '201':
+          description: The tier was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerTier'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/tiers/{tier_id}:
+    parameters:
+    - name: tier_id
+      in: path
+      required: true
+      description: The tier's id, from the list or the create response.
+      schema:
+        type: string
+    patch:
+      tags:
+      - Partner
+      operationId: partnerTierUpdate
+      summary: Change a tier
+      description: |
+        Changes the fields sent and leaves the rest. Every workspace on the tier gets the new limits, and any
+        workspace whose wallet cap is turned on from none gets its cap counter reset. Changes reach requests within about 60 seconds.
+        `"default": true` makes this tier the default; `false` is `400`. A duplicate name is `409`.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerTierPatch'
+      responses:
+        '200':
+          description: The tier after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerTier'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags:
+      - Partner
+      operationId: partnerTierDelete
+      summary: Delete a tier
+      description: |
+        Refused with `409` when a live workspace is on the tier, or when the tier is the default while other tiers
+        exist. Move the workspaces and change the default first. A soft-deleted workspace does not hold the tier;
+        deleting the tier takes it off the workspace.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      responses:
+        '204':
+          description: The tier was deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/workspaces/{external_user_id}/tier:
+    parameters:
+    - name: external_user_id
+      in: path
+      required: true
+      description: The partner's own id for the end user.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{1,128}$'
+    put:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceSetTier
+      summary: Move a workspace to a tier
+      description: |
+        Moves the workspace to the named tier and applies that tier's limits and wallet cap. Changes reach
+        requests within about 60 seconds. Returns the workspace.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerTierAssign'
+      responses:
+        '200':
+          description: The workspace on its new tier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerWorkspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/partner/workspaces/{external_user_id}/credits:
+    parameters:
+    - name: external_user_id
+      in: path
+      required: true
+      description: The partner's own id for the end user.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{1,128}$'
+    post:
+      tags:
+      - Partner
+      operationId: partnerWorkspaceAssignCredits
+      summary: Assign credits to a user
+      description: |
+        Moves credits from the partner's balance to this user's own balance. The user spends them after their free
+        credits and before the partner's balance. They do not reset each month. The funded balance reaches requests
+        at once on the server that took the assignment, and within about 5 seconds on the others.
+
+        Idempotent per `idempotency_key`: a repeat with the same key, the same `credits` and the same user returns
+        `"applied": false` and changes nothing. A key reused with a different amount or user is
+        `409 ERR::REQUEST::CONFLICT` and changes nothing. The partner can assign at most its balance (funded less
+        spent, never the credit line). More than that is `402 ERR::LIMIT::QUOTA_EXCEEDED`.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerCreditAssignment'
+      responses:
+        '200':
+          description: The assignment, applied or already applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerCreditAssigned'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          $ref: '#/components/responses/PaymentRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /healthz:
     get:
       tags:

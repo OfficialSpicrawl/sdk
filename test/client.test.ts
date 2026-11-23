@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   APIConnectionError,
   APITimeoutError,
   AuthenticationError,
+  ConflictError,
+  ERROR_CODES,
   InsufficientCreditsError,
   InternalServerError,
   NotFoundError,
@@ -461,5 +463,270 @@ describe("browser (coming soon)", () => {
       "wss://api.test/v1/browser?proxy_country=de&apikey=spicrawl_test_abc",
     );
     expect(client.browser.connectURL({ token: "wbt_x" })).toBe("wss://api.test/v1/browser?token=wbt_x");
+  });
+});
+
+describe("key and partner accounts", () => {
+  const id = "acct:7.eu_west";
+  const enc = "acct%3A7.eu_west";
+  const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const ws = (user: string) => ({
+    workspace_id: "W1",
+    external_user_id: user,
+    status: "active",
+    created_at: "2026-11-18T09:00:00Z",
+    free_credits: 250,
+    display_name: null,
+  });
+  const assigned = { external_user_id: id, credits: 50, applied: true, user_credits: 50, balance_available: 830 };
+  const body = (c: Call) => JSON.parse(c.init.body as string);
+  const path = (c: Call) => `${c.init.method} ${c.url.replace("https://api.test", "")}`;
+  const hang: Handler = (_u, init) =>
+    new Promise((_res, rej) => init.signal!.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+
+  it("key() is a GET of /v1/key and carries _meta", async () => {
+    const { client, calls } = mock(() => json({ key_id: "k1", name: "Default", prefix: "spicrawl_live_a1b2", scopes: ["partner", "read"], environment: "live", organization: { id: "o1", name: "Acme" }, partner: true, created_at: "2026-11-18T09:00:00Z", expires_at: null }, 200, { "x-request-id": "01K" }));
+    const k = await client.key();
+    expect(path(calls[0]!)).toBe("GET /v1/key");
+    expect(k.partner).toBe(true);
+    expect(k._meta.requestId).toBe("01K");
+  });
+
+  it("reads the account: summary and balance are GETs", async () => {
+    const { client, calls } = mock(() => json({}));
+    await client.partner.summary();
+    await client.partner.balance();
+    expect(calls.map(path)).toEqual(["GET /v1/partner/summary", "GET /v1/partner/wallet"]);
+  });
+
+  it("usage passes the window, grouping and paging through", async () => {
+    const { client, calls } = mock(() => json({}));
+    await client.partner.usage({ from: "2026-11-01", to: "2026-11-03", group_by: "workspace", sort: "credits", limit: 10, offset: 20 });
+    expect(calls[0]!.url).toBe(
+      "https://api.test/v1/partner/usage?from=2026-11-01&to=2026-11-03&group_by=workspace&sort=credits&limit=10&offset=20",
+    );
+  });
+
+  it("create is a PUT with an encoded id and an optional body; created tells 201 from 200", async () => {
+    const { client, calls } = mock(
+      () => json({ ...ws(id), created: true, api_key: "spicrawl_live_x" }, 201),
+      () => json({ ...ws(id), created: false, api_key: "spicrawl_live_x" }, 200),
+    );
+    const first = await client.partner.users.create(id, { tier: "Standard", display_name: "Ana" });
+    expect(first.created).toBe(true);
+    expect(first.api_key).toBe("spicrawl_live_x");
+    expect(path(calls[0]!)).toBe(`PUT /v1/partner/workspaces/${enc}`);
+    expect(body(calls[0]!)).toEqual({ tier: "Standard", display_name: "Ana" });
+    const again = await client.partner.users.create(id);
+    expect(again.created).toBe(false);
+    expect(calls[1]!.init.body).toBeUndefined();
+  });
+
+  it("the single-user routes use the right method, path and body", async () => {
+    const { client, calls } = mock(() => json(ws(id)));
+    await client.partner.users.get(id);
+    await client.partner.users.update(id, { display_name: null });
+    await client.partner.users.suspend(id);
+    await client.partner.users.reactivate(id);
+    await client.partner.users.setTier(id, "Gold");
+    await client.partner.users.usage(id, { from: "2026-11-01", to: "2026-11-03" });
+    expect(calls.map(path)).toEqual([
+      `GET /v1/partner/workspaces/${enc}`,
+      `PATCH /v1/partner/workspaces/${enc}`,
+      `POST /v1/partner/workspaces/${enc}/suspend`,
+      `POST /v1/partner/workspaces/${enc}/reactivate`,
+      `PUT /v1/partner/workspaces/${enc}/tier`,
+      `GET /v1/partner/workspaces/${enc}/usage?from=2026-11-01&to=2026-11-03`,
+    ]);
+    expect(body(calls[1]!)).toEqual({ display_name: null });
+    expect(body(calls[4]!)).toEqual({ tier: "Gold" });
+  });
+
+  it("list follows next_after across pages in the default sort, with no repeats or gaps", async () => {
+    const { client, calls } = mock(
+      () => json({ workspaces: [ws("a"), ws("b")], next_after: "b" }),
+      () => json({ workspaces: [ws("c"), ws("d")], next_after: "d" }),
+      () => json({ workspaces: [ws("e")] }),
+    );
+    const seen: string[] = [];
+    for await (const w of client.partner.users.list({ limit: 2 })) seen.push(w.external_user_id);
+    expect(seen).toEqual(["a", "b", "c", "d", "e"]);
+    expect(calls.map((c) => c.url)).toEqual([
+      "https://api.test/v1/partner/workspaces?limit=2",
+      "https://api.test/v1/partner/workspaces?limit=2&after=b",
+      "https://api.test/v1/partner/workspaces?limit=2&after=d",
+    ]);
+  });
+
+  it("list follows next_offset when sorted by wallet_used", async () => {
+    const { client, calls } = mock(
+      () => json({ workspaces: [ws("x"), ws("y")], next_offset: 2 }),
+      () => json({ workspaces: [ws("z")] }),
+    );
+    const seen: string[] = [];
+    for await (const w of client.partner.users.list({ sort: "wallet_used", limit: 2 })) seen.push(w.external_user_id);
+    expect(seen).toEqual(["x", "y", "z"]);
+    expect(calls[1]!.url).toBe("https://api.test/v1/partner/workspaces?sort=wallet_used&limit=2&offset=2");
+  });
+
+  it("breaking out of list stops before the next page is fetched", async () => {
+    const { client, calls } = mock(
+      () => json({ workspaces: [ws("a"), ws("b")], next_after: "b" }),
+      () => json({ workspaces: [ws("c")] }),
+    );
+    for await (const w of client.partner.users.list({ limit: 2 })) {
+      if (w.external_user_id === "a") break;
+    }
+    expect(calls).toHaveLength(1);
+  });
+
+  it("giveCredits generates a UUID key when none is given and returns it", async () => {
+    const { client, calls } = mock(() => json(assigned));
+    const r = await client.partner.users.giveCredits(id, { credits: 50 });
+    expect(r.idempotency_key).toMatch(UUID_V4);
+    expect(path(calls[0]!)).toBe(`POST /v1/partner/workspaces/${enc}/credits`);
+    expect(body(calls[0]!)).toEqual({ credits: 50, idempotency_key: r.idempotency_key });
+    expect(r.applied).toBe(true);
+  });
+
+  it("giveCredits sends a provided key verbatim and reports applied:false on a repeat", async () => {
+    const { client, calls } = mock(() => json({ ...assigned, applied: false }));
+    const r = await client.partner.users.giveCredits(id, { credits: 50, idempotency_key: "grant-0001-user42" });
+    expect(body(calls[0]!)).toEqual({ credits: 50, idempotency_key: "grant-0001-user42" });
+    expect(r.idempotency_key).toBe("grant-0001-user42");
+    expect(r.applied).toBe(false);
+  });
+
+  it("giveCredits retries a 503 with the same key, so the credits move once", async () => {
+    const { client, calls } = mock(
+      () => problem(503, "ERR::INTERNAL::UNAVAILABLE", { retryable: true }),
+      () => json(assigned),
+    );
+    const r = await client.partner.users.giveCredits(id, { credits: 50 });
+    expect(calls).toHaveLength(2);
+    const keys = calls.map((c) => body(c).idempotency_key);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[1]).toBe(r.idempotency_key);
+  });
+
+  it("giveCredits retries a timeout with the same key", async () => {
+    const { client, calls } = mock(hang, () => json(assigned));
+    const r = await client.partner.users.giveCredits(id, { credits: 50 }, { timeoutMs: 20 });
+    expect(calls).toHaveLength(2);
+    expect(calls.map((c) => body(c).idempotency_key)).toEqual([r.idempotency_key, r.idempotency_key]);
+  });
+
+  it("giveCredits falls back to getRandomValues, and refuses without Web Crypto", async () => {
+    vi.stubGlobal("crypto", { getRandomValues: (a: Uint8Array) => a.fill(0xab) });
+    try {
+      const { client, calls } = mock(() => json(assigned));
+      const r = await client.partner.users.giveCredits(id, { credits: 1 });
+      expect(r.idempotency_key).toMatch(UUID_V4);
+      expect(body(calls[0]!).idempotency_key).toBe(r.idempotency_key);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    vi.stubGlobal("crypto", undefined);
+    try {
+      const { client, calls } = mock(() => json(assigned));
+      await expect(client.partner.users.giveCredits(id, { credits: 1 })).rejects.toThrow(/idempotency_key/);
+      expect(calls).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("PUT is retried like a GET: a 503 is retried, then succeeds", async () => {
+    const { client, calls, sleeps } = mock(
+      () => problem(503, "ERR::INTERNAL::UNAVAILABLE", { retryable: true, retry_after_seconds: 1 }),
+      () => json({ ...ws(id), created: false, api_key: "k" }, 200),
+    );
+    await client.partner.users.create(id);
+    expect(calls).toHaveLength(2);
+    expect(sleeps).toEqual([1000]);
+  });
+
+  it("PATCH is not retried on a 503 or a timeout", async () => {
+    const a = mock(() => problem(503, "ERR::INTERNAL::UNAVAILABLE", { retryable: true }));
+    await expect(a.client.partner.users.update(id, { display_name: "x" })).rejects.toBeInstanceOf(InternalServerError);
+    expect(a.calls).toHaveLength(1);
+    const b = mock(hang);
+    await expect(b.client.partner.users.update(id, { display_name: "x" }, { timeoutMs: 20 })).rejects.toBeInstanceOf(APITimeoutError);
+    expect(b.calls).toHaveLength(1);
+    const c = mock(connReset);
+    await expect(c.client.partner.users.update(id, { display_name: "x" })).rejects.toBeInstanceOf(APIConnectionError);
+    expect(c.calls).toHaveLength(1);
+  });
+
+  it("PATCH is retried on a 429, which is refused before any work", async () => {
+    const { client, calls, sleeps } = mock(
+      () => problem(429, "ERR::LIMIT::RATE_LIMITED", { retryable: true }, { "retry-after": "2" }),
+      () => json(ws(id)),
+    );
+    await client.partner.users.update(id, { display_name: "x" });
+    expect(calls).toHaveLength(2);
+    expect(sleeps).toEqual([2000]);
+  });
+
+  it("402 on an over-balance assignment: class, code, detail, not retried", async () => {
+    const { client, calls } = mock(() => problem(402, "ERR::LIMIT::QUOTA_EXCEEDED", { detail: "Only 880 credits can be given." }));
+    const err = await client.partner.users.giveCredits(id, { credits: 9999 }).catch((e) => e);
+    expect(err).toBeInstanceOf(InsufficientCreditsError);
+    expect(err.code).toBe("ERR::LIMIT::QUOTA_EXCEEDED");
+    expect(err.detail).toBe("Only 880 credits can be given.");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("409 on a reused key for another amount: class, code and detail pass through, not retried", async () => {
+    const detail = "This idempotency_key was already used for a different assignment (another amount or user). Use a new key.";
+    const { client, calls } = mock(() => problem(409, "ERR::REQUEST::CONFLICT", { detail }));
+    const err = await client.partner.users.giveCredits(id, { credits: 7, idempotency_key: "grant-0001-user42" }).catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictError);
+    expect(err.code).toBe("ERR::REQUEST::CONFLICT");
+    expect(err.detail).toBe(detail);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("429 PARTNER_WORKSPACE_LIMIT with Retry-After over 60 s is thrown, not slept", async () => {
+    const { client, calls, sleeps } = mock(() =>
+      problem(429, "ERR::LIMIT::PARTNER_WORKSPACE_LIMIT", { retryable: true, retry_after_seconds: 5400, detail: "Daily allowance used." }, { "retry-after": "5400" }),
+    );
+    const err = await client.partner.users.create("new-user").catch((e) => e);
+    expect(err).toBeInstanceOf(RateLimitError);
+    expect(err.code).toBe("ERR::LIMIT::PARTNER_WORKSPACE_LIMIT");
+    expect(err.retryAfterSeconds).toBe(5400);
+    expect(err.detail).toBe("Daily allowance used.");
+    expect(calls).toHaveLength(1);
+    expect(sleeps).toEqual([]);
+  });
+
+  it("a tier conflict (409) surfaces its detail", async () => {
+    const { client } = mock(() => problem(409, "ERR::REQUEST::CONFLICT", { detail: "3 workspaces are on this tier." }));
+    const err = await client.partner.tiers.delete("t1").catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictError);
+    expect(err.detail).toBe("3 workspaces are on this tier.");
+  });
+
+  it("ERROR_CODES lists the partner workspace limit", () => {
+    expect(ERROR_CODES).toContain("ERR::LIMIT::PARTNER_WORKSPACE_LIMIT");
+  });
+
+  it("tiers: list, create, update and delete", async () => {
+    const tier = { id: "t1", name: "Standard", requests_per_minute: 60, concurrency: 2, free_credits: 250, wallet_cap: 500, default: true, workspaces: 0, created_at: "2026-11-19T10:00:00Z", updated_at: "2026-11-19T10:00:00Z" };
+    const { client, calls } = mock(
+      () => json({ tiers: [tier] }),
+      () => json(tier, 201),
+      () => json({ ...tier, requests_per_minute: 120 }),
+      () => new Response(null, { status: 204 }),
+    );
+    await client.partner.tiers.list();
+    await client.partner.tiers.create({ name: "Standard", requests_per_minute: 60, concurrency: 2, free_credits: 250, wallet_cap: 500, default: true });
+    const up = await client.partner.tiers.update("t 1", { requests_per_minute: 120 });
+    const del = await client.partner.tiers.delete("t 1");
+    expect(calls.map(path)).toEqual(["GET /v1/partner/tiers", "POST /v1/partner/tiers", "PATCH /v1/partner/tiers/t%201", "DELETE /v1/partner/tiers/t%201"]);
+    expect(body(calls[1]!)).toMatchObject({ name: "Standard", wallet_cap: 500, default: true });
+    expect(body(calls[2]!)).toEqual({ requests_per_minute: 120 });
+    expect(up.requests_per_minute).toBe(120);
+    expect(del._meta.status).toBe(204);
   });
 });

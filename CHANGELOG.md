@@ -5,6 +5,12 @@ All notable changes to `@spicrawl/sdk` are documented here. This project follows
 
 ## Unreleased
 
+- **Partner accounts** (`client.partner`) for platforms that resell Spicrawl: `summary()`, `balance()`, `usage()`; `users` (`list` with paging, `create`, `get`, `update`, `suspend`, `reactivate`, `setTier`, `giveCredits`, `usage`); and `tiers` (`list`, `create`, `update`, `delete`). `create` returns the user's API key, a credential: store it, do not log it.
+- `users.giveCredits()` sends an idempotency key, generated when you do not pass one and returned as `idempotency_key`. The SDK retries it with the same key, so a retry cannot move credits twice.
+- `client.key()` returns what the calling key is (`GET /v1/key`).
+- Workspaces accept a `display_name`, set on create or with `users.update()`.
+- Retry policy for the new methods: PUT is retried like GET; PATCH is retried only on 429 and on connections that never opened. Existing GET, POST and DELETE behaviour is unchanged.
+- `ERR::LIMIT::PARTNER_WORKSPACE_LIMIT` is in `ERROR_CODES`. A `Retry-After` over 60 seconds is thrown, not slept, as before.
 - README, the bundled `openapi.yaml` copy and the generated types no longer name browser engines. Screenshots and PDFs need no `engine` argument: rendering is chosen automatically, and `engine` and `headless` are deprecated and ignored by the API. The `engine` request type is now `string` instead of an engine enum. No runtime change.
 
 ## 0.1.3 — 2026-10-05

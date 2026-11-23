@@ -46,13 +46,19 @@ export interface ClientOptions {
 export type QueryValue = string | number | boolean | readonly (string | number)[] | null | undefined;
 
 export interface CallSpec {
-  method: "GET" | "POST" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
   query?: Record<string, QueryValue> | object;
   body?: unknown;
   /** How to read a successful body. */
   parse?: "json" | "text" | "arraybuffer" | "none" | "auto";
   accept?: string;
+  /**
+   * Whether repeating the call can repeat its work. Defaults by method: GET, PUT and DELETE are
+   * idempotent; POST and PATCH are not. Set `true` on a POST that carries a server-side
+   * idempotency key, so the same key makes a retry safe.
+   */
+  idempotent?: boolean;
 }
 
 export interface RawResult {
@@ -221,7 +227,7 @@ export class Transport {
 
   async request(spec: CallSpec, opts: RequestOptions = {}): Promise<RawResult> {
     const maxRetries = opts.maxRetries ?? this.maxRetries;
-    const idempotent = spec.method !== "POST";
+    const idempotent = spec.idempotent ?? (spec.method !== "POST" && spec.method !== "PATCH");
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.attempt(spec, opts);
@@ -235,8 +241,9 @@ export class Transport {
   }
 
   /**
-   * The retry policy. There are no idempotency keys server-side, so a retried POST can
-   * perform and bill the work twice: POSTs retry only when the server provably did no work.
+   * The retry policy. Most POSTs have no idempotency key, so a retried POST can perform and
+   * bill the work twice: they retry only when the server provably did no work. PATCH is
+   * treated like POST. A call that sets `idempotent` (see CallSpec) follows the idempotent rules.
    */
   private retryDelay(err: unknown, idempotent: boolean, attempt: number, max: number): number | null {
     if (attempt >= max || !(err instanceof SpicrawlError)) return null;

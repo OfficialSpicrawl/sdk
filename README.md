@@ -57,6 +57,7 @@ It prints the page as Markdown, then the target site's status, the engine that r
 - **Screenshots and PDFs** of a full page or a single element.
 - **Batch jobs of up to 10,000 URLs per call** (100,000 per open job), with results streamed as JSON Lines.
 - **Sessions** that keep cookies and storage across scrapes, and **your own proxy** (HTTP, HTTPS, SOCKS5) on any request.
+- **Partner accounts:** provision a workspace, API key, shared balance and tiers for each of your own users.
 - **Billing-safe retries:** a POST is retried only when the server provably did no work, so a retry never bills a scrape twice.
 - **Zero runtime dependencies**, ESM and CommonJS builds, and types generated from the OpenAPI spec.
 
@@ -208,13 +209,48 @@ const recon = await spicrawl.usage.reconciliation({ day: "2026-09-30" });
 
 `requests.list({ all_projects: "true" })` covers every project in the organization and needs a key with the `read` scope.
 
+## Partner accounts
+
+Partner accounts are for platforms that resell Spicrawl to their own users. Each user gets a workspace with its own API key, and every workspace draws on one balance that you fund.
+
+```ts
+// Your partner key stays on your server. It cannot scrape: it manages users, tiers and the balance.
+const platform = new Spicrawl({ apiKey: process.env.SPICRAWL_PARTNER_KEY });
+
+// Limits every new user starts on: a monthly cap on how much of your balance a user may draw.
+await platform.partner.tiers.create({
+  name: "Standard", requests_per_minute: 60, concurrency: 2, free_credits: 250, wallet_cap: 500, default: true,
+});
+
+// Create the user's workspace. The response carries its API key: store it as their credential.
+const { api_key } = await platform.partner.users.create("user-42", { display_name: "Ada" });
+
+// The user's requests use a second client that holds only their key.
+const userSpicrawl = new Spicrawl({ apiKey: api_key });
+const page = await userSpicrawl.scrape({ url: "https://example.com" });
+
+// Give credits from your balance, then read the balance and the heaviest users.
+await platform.partner.users.giveCredits("user-42", { credits: 50 });
+const { balance_credits } = await platform.partner.balance();
+for await (const u of platform.partner.users.list({ sort: "wallet_used" })) {
+  console.log(u.external_user_id, u.wallet_used, u.wallet_cap);
+}
+```
+
+- `users.create()` is safe to repeat: it returns the same key, or a new one if the stored key can no longer be read, so always store the latest `api_key`. It contains a credential: do not log it.
+- A request is paid from the user's free credits, then the credits you gave them, then your balance, up to the user's `wallet_cap`. `wallet_used` and `wallet_cap` on each user show where that stands.
+- `giveCredits()` sends an idempotency key: the one you pass, or a UUID the SDK generates. It is returned as `idempotency_key`. To retry an assignment later, pass that key again: a repeat changes nothing and returns `applied: false`. Assigning more than `balance_credits` is `402 ERR::LIMIT::QUOTA_EXCEEDED`; reusing a key for another amount or user is `409`.
+- Creating workspaces is limited per UTC day. A refusal is `429 ERR::LIMIT::PARTNER_WORKSPACE_LIMIT` with `Retry-After` up to 00:00 UTC. The SDK throws it instead of sleeping, as for any `Retry-After` over 60 seconds: catch `RateLimitError` and read `retryAfterSeconds`.
+- Tier changes and moves between tiers reach requests within about 60 seconds. `partner.usage({ group_by: "workspace" })` reports usage per user, and `partner.users.usage(id, { from, to })` reports one user.
+- `spicrawl.key()` reports the scopes and organization of the key a client holds, so code can tell a partner key from a workspace key.
+
 ## Remote browser (coming soon)
 
 `spicrawl.browser.token()` and `spicrawl.browser.connectURL()` are typed for the remote CDP browser, which is **not available yet**. They exist so your code will not change when it launches. See the [CDP browser guide](https://docs.spicrawl.com/guides/cdp-browser).
 
 ## Pagination
 
-`batch.list()`, `sessions.list()` and `requests.list()` return a `PagePromise`. `await` it for one page, or `for await` it to walk every item on every page:
+`batch.list()`, `sessions.list()`, `requests.list()` and `partner.users.list()` return a `PagePromise`. `await` it for one page, or `for await` it to walk every item on every page:
 
 ```ts
 let page = await spicrawl.requests.list({ limit: 50 });
@@ -257,7 +293,7 @@ Every error the SDK throws is a `SpicrawlError`. HTTP errors map to subclasses b
 | `APIConnectionError` | none (`status` 0) | DNS failure, refused or reset connection |
 | `APITimeoutError` | none (`status` 0) | `timeoutMs` exceeded; subclass of `APIConnectionError` |
 
-Each error carries `status`, `code` (a stable `ERR::FAMILY::NAME`), `retryable` (the server's verdict), `retryAfterSeconds`, `requestId`, `diagnostics.hint` and the raw `problem` body. `ERROR_CODES` lists all 48 documented codes.
+Each error carries `status`, `code` (a stable `ERR::FAMILY::NAME`), `retryable` (the server's verdict), `retryAfterSeconds`, `requestId`, `diagnostics.hint` and the raw `problem` body. `ERROR_CODES` lists all 49 documented codes.
 
 ```ts
 import { Spicrawl, RateLimitError, isSpicrawlError } from "@spicrawl/sdk";
@@ -274,20 +310,22 @@ try {
 
 ## Retries and timeouts
 
-The API has no idempotency keys, so a repeated scrape is a second, billed scrape. The SDK retries accordingly:
+Most calls carry no idempotency key, so a repeated scrape is a second, billed scrape. Only partner credit assignment (`users.giveCredits()`) sends one. The SDK retries accordingly:
 
 - `maxRetries` defaults to **2** retries after the first attempt.
 - Backoff is exponential with jitter: about 0.5 s, 1 s, 2 s, capped at 8 s.
 - A `Retry-After` header (or `retry_after_seconds` in the body) is honoured up to **60 s**. A longer wait is thrown as the error instead.
 - A server answer of `retryable: false` is never retried.
 
-| Failure | GET, DELETE | POST (scrape, batch, sessions) |
-|---|---|---|
-| Connection error | retried | retried only if the connection never opened |
-| Timeout | retried | never: the server may still be working and billing |
-| 408, 5xx | retried | never |
-| 429 | retried | retried: it is refused before any work |
-| Other 4xx | never | never |
+| Failure | GET, PUT, DELETE | POST, PATCH (scrape, batch, sessions, partner edits) | `users.giveCredits()` (POST with an idempotency key) |
+|---|---|---|---|
+| Connection error | retried | retried only if the connection never opened | retried |
+| Timeout | retried | never: the server may still be working and billing | retried |
+| 408, 5xx | retried | never | retried |
+| 429 | retried | retried: it is refused before any work | retried |
+| Other 4xx | never | never | never |
+
+PUT is retried like a GET: it is idempotent by HTTP rules (create-or-fetch a workspace, set a tier). PATCH edits a record, so it follows POST. `giveCredits()` is retried like an idempotent call because its key makes a repeat a no-op; the SDK sends the same key on every attempt.
 
 `timeoutMs` is **per attempt** and defaults to **180,000 ms** (3 minutes, because browser renders can be slow). An `AbortSignal` cancels the request and any pending retry sleep. Override any of these per client or per call:
 
@@ -413,7 +451,7 @@ The site's status is data, not an error. Read it from `status` in the envelope, 
 
 ### Can a retry bill me twice?
 
-Not from the SDK's own retries. POST requests are retried only on 429 or when the connection never opened, both cases where no work was done. Your own retry of a scrape that succeeded is billed again.
+Not from the SDK's own retries. Scrape, batch and session POSTs are retried only on 429 or when the connection never opened, both cases where no work was done. Partner credit assignment is also retried on 5xx and timeouts, because its idempotency key makes a repeat a no-op. Your own retry of a scrape that succeeded is billed again.
 
 ### Can I crawl a whole website?
 

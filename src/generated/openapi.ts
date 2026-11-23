@@ -755,6 +755,352 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/partner/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The partner's account at a glance
+         * @description The partner's allowance, its users and caps, and its balance (the same figures as `GET /v1/partner/wallet`
+         *     under `balance`), in one call. `users` and `caps` are computed in one statement from the partner's
+         *     workspaces: `caps.committed` is the sum of the effective cap of each active workspace that has one, and
+         *     `caps.uncapped_users` counts the active ones that have none.
+         */
+        get: operations["partnerSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What this API key is
+         * @description Returns the key's id, name, prefix, scopes, environment, organization, and whether the organization is a
+         *     partner account or a partner's workspace. Any valid key may call it; no scope is needed. The secret and
+         *     its hash are never returned. `Cache-Control: no-store`.
+         */
+        get: operations["keyInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The partner's usage across its workspaces
+         * @description Usage summed over the partner's child workspaces. `group_by=day` gives one row per UTC day;
+         *     `group_by=workspace` gives one row per workspace, named by `external_user_id`, and pages it.
+         *     The window is `from` (inclusive) to `to` (exclusive), default the last 30 days, at most 400 days.
+         */
+        get: operations["partnerUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/workspaces/{external_user_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One workspace's usage
+         * @description Totals and one row per UTC day for a workspace of this partner. A deleted workspace is not found.
+         */
+        get: operations["partnerWorkspaceUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The partner wallet
+         * @description `spent` is the all-time wallet charge across the partner's workspaces, `balance` is funded less spent,
+         *     and `available` is balance plus the credit line. The `*_credits` fields are the same values in whole credits.
+         *     Only `balance` can be assigned to users; the credit line cannot.
+         */
+        get: operations["partnerWallet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the partner's workspaces
+         * @description Pages the workspaces this partner provisioned. Items carry no `api_key`. Each item has its usage figures
+         *     (see `PartnerWorkspace`). `sort=external_user_id` (the default) pages by keyset: `next_after` is present
+         *     when the page is full; pass it as `after`. `sort=wallet_used` orders by the wallet-paid spend this window,
+         *     largest first, and pages by `offset`: `next_offset` is present when the page is full. The wallet sort is
+         *     on the usage records figure, which trails the live one by about 60 seconds; it reads every workspace of the
+         *     partner, so it costs more than the default sort.
+         */
+        get: operations["partnerWorkspacesList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/workspaces/{external_user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one workspace
+         * @description Returns the workspace without its `api_key`, with its usage figures (`wallet_used`, `free_used`, `own_credits`, `window_resets_at`). `own_credits` is null when the balance cannot be read at that moment. Use `PUT` to read the key.
+         */
+        get: operations["partnerWorkspaceGet"];
+        /**
+         * Provision a workspace, or fetch it and its default key
+         * @description Creates the workspace for this end user if it does not exist, makes sure it has its default
+         *     API key, and returns that key's plaintext. Calling it again is how the key is read again.
+         *
+         *     `201` when this call created the workspace, `200` when it already existed. `created` says which.
+         *     The key is normally the same on every call, but a new one is issued when the stored key has
+         *     expired or can no longer be read, so store whatever the latest call returned. The response is
+         *     sent with `Cache-Control: no-store`.
+         *
+         *     A partner may create at most a fixed number of workspaces per UTC day. Past that, a new user is
+         *     `429 ERR::LIMIT::PARTNER_WORKSPACE_LIMIT`. An existing user is never limited.
+         *
+         *     A workspace that has been soft-deleted is `409 ERR::REQUEST::CONFLICT` and returns no key: Spicrawl
+         *     support must restore it first. A closed workspace is `409 ERR::REQUEST::CONFLICT` too, with no key;
+         *     closure is terminal.
+         *
+         *     Rate limit: this route allows 2 requests per second per partner, with bursts of 20, on top of the
+         *     20-per-second limit every partner route shares.
+         *
+         *     The optional body names the tier a new workspace starts on, by id or name. Without it the workspace
+         *     gets the partner's default tier, or no tier when there is none. An existing workspace keeps its tier,
+         *     but an unknown tier is `404` either way. Move a workspace with `PUT .../tier`.
+         */
+        put: operations["partnerWorkspaceProvision"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set or clear a workspace's display name
+         * @description Sets the workspace's display name (1 to 100 characters), or clears it with `null`. Changes nothing else
+         *     and returns the workspace without its key.
+         */
+        patch: operations["partnerWorkspaceUpdate"];
+        trace?: never;
+    };
+    "/v1/partner/workspaces/{external_user_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend a workspace
+         * @description Sets the workspace to `suspended` with the reason "suspended by partner". Its key is refused on
+         *     requests. Idempotent. A workspace already suspended (by the partner or by Spicrawl) is
+         *     returned as it stands: a suspension by Spicrawl keeps its reason. A closed workspace is
+         *     `409 ERR::REQUEST::CONFLICT`.
+         */
+        post: operations["partnerWorkspaceSuspend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/workspaces/{external_user_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate a workspace
+         * @description Lifts a suspension the partner made. Idempotent. A closed workspace is `409 ERR::REQUEST::CONFLICT`.
+         *     A workspace suspended by Spicrawl (a suspension by Spicrawl) is `409 ERR::REQUEST::CONFLICT` with the
+         *     problem "suspended by Spicrawl; contact support"; it is left suspended.
+         */
+        post: operations["partnerWorkspaceReactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/tiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the partner's tiers
+         * @description The partner's tiers, the default first, then by name. `workspaces` counts the live workspaces on each tier.
+         */
+        get: operations["partnerTiersList"];
+        put?: never;
+        /**
+         * Create a tier
+         * @description Creates a tier. `name`, `requests_per_minute`, `concurrency` and `free_credits` are required. The
+         *     partner's first tier becomes the default whatever `default` says. A value above the partner's ceiling
+         *     is `400`, and the message gives the bound. A name already used by another tier is `409`.
+         */
+        post: operations["partnerTierCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/tiers/{tier_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tier's id, from the list or the create response. */
+                tier_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a tier
+         * @description Refused with `409` when a live workspace is on the tier, or when the tier is the default while other tiers
+         *     exist. Move the workspaces and change the default first. A soft-deleted workspace does not hold the tier;
+         *     deleting the tier takes it off the workspace.
+         */
+        delete: operations["partnerTierDelete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a tier
+         * @description Changes the fields sent and leaves the rest. Every workspace on the tier gets the new limits, and any
+         *     workspace whose wallet cap is turned on from none gets its cap counter reset. Changes reach requests within about 60 seconds.
+         *     `"default": true` makes this tier the default; `false` is `400`. A duplicate name is `409`.
+         */
+        patch: operations["partnerTierUpdate"];
+        trace?: never;
+    };
+    "/v1/partner/workspaces/{external_user_id}/tier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Move a workspace to a tier
+         * @description Moves the workspace to the named tier and applies that tier's limits and wallet cap. Changes reach
+         *     requests within about 60 seconds. Returns the workspace.
+         */
+        put: operations["partnerWorkspaceSetTier"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/workspaces/{external_user_id}/credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign credits to a user
+         * @description Moves credits from the partner's balance to this user's own balance. The user spends them after their free
+         *     credits and before the partner's balance. They do not reset each month. The funded balance reaches requests
+         *     at once on the server that took the assignment, and within about 5 seconds on the others.
+         *
+         *     Idempotent per `idempotency_key`: a repeat with the same key, the same `credits` and the same user returns
+         *     `"applied": false` and changes nothing. A key reused with a different amount or user is
+         *     `409 ERR::REQUEST::CONFLICT` and changes nothing. The partner can assign at most its balance (funded less
+         *     spent, never the credit line). More than that is `402 ERR::LIMIT::QUOTA_EXCEEDED`.
+         */
+        post: operations["partnerWorkspaceAssignCredits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -2686,6 +3032,257 @@ export interface components {
                 [key: string]: "ok" | "unreachable";
             };
         };
+        PartnerUsageTotals: {
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            requests_failed: number;
+            /** Format: int64 */
+            credits_micro: number;
+            /**
+             * Format: int64
+             * @description The part of the charge paid from the partner wallet.
+             */
+            credits_wallet_micro: number;
+            /**
+             * Format: int64
+             * @description The part of the charge paid from the workspace's own balance.
+             */
+            credits_own_micro: number;
+        };
+        PartnerUsageWorkspace: components["schemas"]["PartnerUsageTotals"] & {
+            external_user_id: string;
+        };
+        PartnerWorkspace: {
+            /** @description The workspace's organization id. */
+            workspace_id: string;
+            external_user_id: string;
+            /** @description The name the partner gave this user, shown to the partner only. Set on create or with PATCH; null when unset. */
+            display_name?: string | null;
+            /**
+             * @description `deleted` when the workspace has been soft-deleted by Spicrawl support. A deleted workspace keeps
+             *     its `external_user_id` but cannot be served; `PUT` on it is `409` and returns no key.
+             * @enum {string}
+             */
+            status: "active" | "suspended" | "closed" | "deleted";
+            /** Format: date-time */
+            created_at: string;
+            /** @description The workspace's monthly allowance, in whole credits, as set for the partner. */
+            free_credits: number;
+            /**
+             * @description The most this workspace may draw from the partner's shared wallet in one allowance month, in whole
+             *     credits. Its own setting when Spicrawl set one, else the partner's default. `null` when it has no
+             *     cap. Free credits and the workspace's own balance are not counted against it. A request that would
+             *     need more than the cap left is refused with `402 ERR::LIMIT::QUOTA_EXCEEDED` ("...reached its spending
+             *     limit for this month..."). A cap change reaches requests within about 5 seconds.
+             */
+            wallet_cap?: number | null;
+            /** @description The tier the workspace is on, or `null` when it has none. */
+            tier?: {
+                id: string;
+                name: string;
+            } | null;
+            /** @description The tier's requests per minute for this user's scrape and browser requests, or `null` when there is no tier. */
+            requests_per_minute?: number | null;
+            /** @description The tier's requests and browser sessions a user may run at once, or `null` when there is no tier. */
+            concurrency?: number | null;
+            /**
+             * @description Where `wallet_cap` comes from. `tier`: the workspace's tier sets it. `workspace`: Spicrawl set it on
+             *     this workspace while it is on no tier. `account_default`: the partner's default (a tier with no cap
+             *     falls back to it). `none`: no cap.
+             * @enum {string}
+             */
+            wallet_cap_source?: "tier" | "workspace" | "account_default" | "none";
+            /**
+             * Format: date-time
+             * @description When the workspace's current allowance month ends (its monthly anniversary), RFC 3339 UTC.
+             */
+            window_resets_at?: string;
+            /**
+             * @description Whole credits this user has drawn from the partner's balance in its current allowance month (floor).
+             *     Compare with `wallet_cap`. Null on responses that do not compute it (`PUT`, suspend, reactivate) and
+             *     when it cannot be read.
+             */
+            wallet_used?: number | null;
+            /**
+             * @description `live` when read from the live cap counter, which is current. `rollup` when read from usage records,
+             *     which trails by about 60 seconds. Null when `wallet_used` is null.
+             * @enum {string|null}
+             */
+            wallet_used_source?: "live" | "rollup" | null;
+            /** @description Whole free credits this user has used in its current allowance month (floor). Null on responses that do not compute it. */
+            free_used?: number | null;
+            /**
+             * @description Credits the partner gave this user that remain unspent, in whole credits (floor). The single `GET`
+             *     reads it live; the list reads usage records, so it can trail by about 60 seconds. Null on responses that
+             *     do not compute it, and when it cannot be read.
+             */
+            own_credits?: number | null;
+        };
+        /** @description The single-workspace read. Same fields as `PartnerWorkspace`; kept as a name for existing clients of the spec. */
+        PartnerWorkspaceDetail: components["schemas"]["PartnerWorkspace"];
+        PartnerWorkspaceUpdate: {
+            /** @description The new display name, or null to clear it. */
+            display_name: string | null;
+        };
+        PartnerTier: {
+            /** @description Spicrawl's id for the tier. */
+            id: string;
+            /** @description Unique among the partner's tiers, ignoring case. */
+            name: string;
+            /** @description Requests per minute a user may make to scrape, and cloud browser sessions a user may start. Cannot exceed the partner's ceiling (60 times its requests per second). */
+            requests_per_minute: number;
+            /** @description Requests and browser sessions a user may run at once. Cannot exceed the partner's concurrency limit. */
+            concurrency: number;
+            /** @description Free credits per user per month, in whole credits. Cannot exceed the free credits Spicrawl grants the partner per workspace. */
+            free_credits: number;
+            /** @description Most credits per user per month the user may draw from the partner's balance. `null` means the tier sets no cap; a partner default then applies. */
+            wallet_cap: number | null;
+            /** @description True on the one tier new workspaces start on. */
+            default: boolean;
+            /** @description Live workspaces on this tier. */
+            workspaces: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PartnerTierList: {
+            tiers: components["schemas"]["PartnerTier"][];
+        };
+        PartnerTierInput: {
+            /** @description Trimmed before it is stored. */
+            name: string;
+            requests_per_minute: number;
+            concurrency: number;
+            free_credits: number;
+            wallet_cap?: number | null;
+            /** @description Makes this tier the default. Ignored for the partner's first tier, which is always the default. */
+            default?: boolean;
+        };
+        /** @description Any subset of the `PartnerTierInput` fields. `default` may only be `true`. */
+        PartnerTierPatch: {
+            name?: string;
+            requests_per_minute?: number;
+            concurrency?: number;
+            free_credits?: number;
+            wallet_cap?: number | null;
+            /** @enum {boolean} */
+            default?: true;
+        };
+        PartnerTierAssign: {
+            /** @description The tier's id or its name. */
+            tier: string;
+        };
+        PartnerCreditAssignment: {
+            /** @description Whole credits to move from the partner's balance to the user's own balance. At most the partner's balance (funded less spent); the credit line cannot be assigned. */
+            credits: number;
+            /** @description 8 to 100 characters, no spaces. Use a new key for each assignment; a repeat with the same key changes nothing. */
+            idempotency_key: string;
+        };
+        PartnerCreditAssigned: {
+            external_user_id: string;
+            /** Format: int64 */
+            credits: number;
+            /** @description False when the idempotency key was used before. Nothing changed. */
+            applied: boolean;
+            /**
+             * Format: int64
+             * @description The user's own assigned balance left, in whole credits.
+             */
+            user_credits: number;
+            /**
+             * Format: int64
+             * @description The partner's assignable balance (funded less spent, floored at zero, credit line excluded) after this assignment, in whole credits. The name is kept for compatibility.
+             */
+            balance_available: number;
+        };
+        PartnerWorkspaceProvisioned: components["schemas"]["PartnerWorkspace"] & {
+            /** @description True when this call created the workspace. */
+            created: boolean;
+            /** @description The workspace's default API key, in full. Normally the same on every call; a new one is issued if the stored key has expired or can no longer be read. Store the latest one; it is the workspace's credential. */
+            api_key: string;
+        };
+        PartnerWorkspaceList: {
+            workspaces: components["schemas"]["PartnerWorkspace"][];
+            /** @description Present when the page is full and `sort` is `external_user_id`. Pass it as `after` to read on. */
+            next_after?: string;
+            /** @description Present when the page is full and `sort` is `wallet_used`. Pass it as `offset` to read on. */
+            next_offset?: number;
+        };
+        PartnerSummary: {
+            /** @description Always true for a partner account. */
+            partner: boolean;
+            /** Format: uuid */
+            org_id: string;
+            /** @description The partner's default monthly allowance per workspace, in whole credits. */
+            free_credits: number;
+            /** @description New workspaces the partner may create per UTC day. */
+            workspace_daily_limit: number;
+            /** @description Workspaces the partner has created, deleted ones included. */
+            workspace_count: number;
+            limits: {
+                max_requests_per_minute: number;
+                max_concurrency: number;
+                /** @description Whole credits. The most a tier may grant per workspace. */
+                max_free_credits: number;
+            };
+            /** @description Workspaces not deleted. `total` also counts closed ones, which are in neither `active` nor `suspended`. */
+            users: {
+                total: number;
+                active: number;
+                suspended: number;
+            };
+            /** @description Over active workspaces only. */
+            caps: {
+                /** @description Sum of the effective monthly cap of each active workspace that has one, each floored to whole credits. */
+                committed: number;
+                /** @description Active workspaces with no effective cap. They are not in `committed`. */
+                uncapped_users: number;
+            };
+            /** @description The same figures as `GET /v1/partner/wallet`. Only `balance_credits` can be assigned to users. */
+            balance: {
+                funded_credits: number;
+                credit_line_credits: number;
+                spent_credits: number;
+                /** @description What has been added */
+                balance_credits: number;
+                /** @description Balance plus credit line. */
+                available_credits: number;
+                /** Format: int64 */
+                funded_micro?: number;
+                /** Format: int64 */
+                credit_line_micro?: number;
+                /** Format: int64 */
+                spent_micro?: number;
+                /** Format: int64 */
+                balance_micro?: number;
+                /** Format: int64 */
+                available_micro?: number;
+            };
+        };
+        /** @description What the calling key is. Never the secret or its hash. */
+        KeyInfo: {
+            /** Format: uuid */
+            key_id: string;
+            name: string;
+            /** @description The display prefix */
+            prefix: string;
+            scopes: string[];
+            /** @enum {string} */
+            environment: "live" | "test";
+            organization: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            };
+            /** @description True when the key's organization is a partner account. */
+            partner: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at?: string | null;
+        };
     };
     responses: {
         /** @description The request is invalid. Not retryable; fix the request using `code` and `diagnostics.hint`. */
@@ -3912,6 +4509,580 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             500: components["responses"]["ServerError"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    partnerSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The partner's summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    keyInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyInfo"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerUsage: {
+        parameters: {
+            query?: {
+                from?: string;
+                /** @description Exclusive. */
+                to?: string;
+                group_by?: "day" | "workspace";
+                /** @description Workspace grouping only. Descending, ties broken by external_user_id. */
+                sort?: "credits" | "requests" | "fail_rate" | "last_active";
+                /** @description Workspace grouping only, 1 to 200. */
+                limit?: number;
+                /** @description Workspace grouping only. */
+                offset?: number;
+                /** @description Workspace grouping only. A prefix of external_user_id. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The partner's usage. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        period: {
+                            /** Format: date */
+                            start?: string;
+                            /**
+                             * Format: date
+                             * @description Exclusive.
+                             */
+                            end?: string;
+                            /** @example [start, end) */
+                            bounds?: string;
+                            days?: number;
+                        };
+                        /** @enum {string} */
+                        group_by: "day" | "workspace";
+                        totals: components["schemas"]["PartnerUsageTotals"];
+                        /** @description `day` rows carry the totals fields plus `day`; `workspace` rows are PartnerUsageWorkspace. */
+                        rows: Record<string, unknown>[];
+                        /** @description Present for group_by=workspace. */
+                        page?: {
+                            total?: number;
+                            limit?: number;
+                            offset?: number;
+                            next_offset?: number | null;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceUsage: {
+        parameters: {
+            query?: {
+                from?: string;
+                /** @description Exclusive. */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workspace's usage. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        external_user_id: string;
+                        period: Record<string, unknown>;
+                        totals: components["schemas"]["PartnerUsageTotals"];
+                        rows: Record<string, unknown>[];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The wallet. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        funded_micro: number;
+                        /** Format: int64 */
+                        credit_line_micro: number;
+                        /** Format: int64 */
+                        spent_micro: number;
+                        /** Format: int64 */
+                        balance_micro: number;
+                        /** Format: int64 */
+                        available_micro: number;
+                        /** Format: int64 */
+                        funded_credits?: number;
+                        /** Format: int64 */
+                        credit_line_credits?: number;
+                        /** Format: int64 */
+                        spent_credits?: number;
+                        /** Format: int64 */
+                        balance_credits?: number;
+                        /** Format: int64 */
+                        available_credits?: number;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspacesList: {
+        parameters: {
+            query?: {
+                /** @description Page size, 1 to 200. */
+                limit?: number;
+                /** @description The `next_after` of the previous page. Only with `sort=external_user_id`. */
+                after?: string;
+                /** @description Case-sensitive prefix of `external_user_id`. Matches all when absent. */
+                q?: string;
+                /** @description `external_user_id` (default) or `wallet_used` (descending by this window's wallet-paid spend). */
+                sort?: "external_user_id" | "wallet_used";
+                /** @description Rows to skip. Only with `sort=wallet_used`; `next_offset` of the previous page. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of workspaces. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspaceList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workspace. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspaceDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceProvision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description The tier's id or name. */
+                    tier?: string;
+                    /** @description Names a new workspace. An existing workspace keeps its name: change it with PATCH. */
+                    display_name?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The workspace already existed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspaceProvisioned"];
+                };
+            };
+            /** @description The workspace was created by this call. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspaceProvisioned"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            /**
+             * @description Either the partner's daily allowance of new workspaces is used up (`ERR::LIMIT::PARTNER_WORKSPACE_LIMIT`,
+             *     `Retry-After` runs to the next 00:00 UTC), or the partner's rate limit for this route is exceeded
+             *     (`ERR::LIMIT::RATE_LIMITED`, `Retry-After` in seconds).
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerWorkspaceUpdate"];
+            };
+        };
+        responses: {
+            /** @description The workspace, with its new name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceSuspend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workspace, now suspended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceReactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workspace, now active. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerTiersList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tiers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerTierList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerTierCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerTierInput"];
+            };
+        };
+        responses: {
+            /** @description The tier was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerTier"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerTierDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tier's id, from the list or the create response. */
+                tier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tier was deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerTierUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tier's id, from the list or the create response. */
+                tier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerTierPatch"];
+            };
+        };
+        responses: {
+            /** @description The tier after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerTier"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceSetTier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerTierAssign"];
+            };
+        };
+        responses: {
+            /** @description The workspace on its new tier. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerWorkspace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerWorkspaceAssignCredits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The partner's own id for the end user. */
+                external_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerCreditAssignment"];
+            };
+        };
+        responses: {
+            /** @description The assignment, applied or already applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerCreditAssigned"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            402: components["responses"]["PaymentRequired"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["ServerError"];
         };
     };
     healthLive: {

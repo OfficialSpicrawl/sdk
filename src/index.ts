@@ -34,6 +34,7 @@ export type { Sessions } from "./resources/sessions.js";
 export type { Requests } from "./resources/requests.js";
 export type { Usage } from "./resources/usage.js";
 export type { Browser } from "./resources/browser.js";
+export type { Partner, PartnerUsers, PartnerTiers, GiveCreditsParams } from "./resources/partner.js";
 export { ERROR_CODES } from "./types.js";
 export type * from "./types.js";
 export type { components, operations, paths } from "./generated/openapi.js";
