@@ -79,7 +79,9 @@ export type PartnerWorkspace = Schemas["PartnerWorkspace"];
 export type PartnerWorkspaceDetail = Schemas["PartnerWorkspaceDetail"];
 export type PartnerWorkspaceProvisioned = Schemas["PartnerWorkspaceProvisioned"];
 export type PartnerWorkspaceList = Schemas["PartnerWorkspaceList"];
-export type PartnerWorkspaceUpdate = Schemas["PartnerWorkspaceUpdate"];
+export type PartnerWorkspaceUpdate = NonNullable<
+  NonNullable<operations["partnerWorkspaceSetDisplayName"]["requestBody"]>["content"]["application/json"]
+>;
 export type PartnerWorkspaceProvisionRequest = NonNullable<
   NonNullable<operations["partnerWorkspaceProvision"]["requestBody"]>["content"]["application/json"]
 >;
@@ -94,6 +96,44 @@ export type PartnerUserListParams = Query<"partnerWorkspacesList">;
 export type PartnerUsageParams = Query<"partnerUsage">;
 export type PartnerWorkspaceUsageParams = Query<"partnerWorkspaceUsage">;
 export type KeyInfo = Schemas["KeyInfo"];
+
+// ---- Brand ----------------------------------------------------------------
+export type BrandRequest = Schemas["BrandRequest"];
+export type BrandResponse = Schemas["BrandResponse"];
+
+// ---- Webhooks -------------------------------------------------------------
+export type WebhookEvent = Schemas["WebhookEvent"];
+export type WebhookFormat = Schemas["WebhookFormat"];
+export type WebhookEndpoint = Schemas["WebhookEndpoint"];
+export type WebhookEndpointWithSecret = Schemas["WebhookEndpointWithSecret"];
+export type WebhookEndpointCreate = Schemas["WebhookEndpointCreate"];
+export type WebhookEndpointUpdate = Schemas["WebhookEndpointUpdate"];
+export type WebhookEndpointList = Schemas["WebhookEndpointList"];
+export type WebhookDelivery = Schemas["WebhookDelivery"];
+export type WebhookDeliveryStatus = Schemas["WebhookDeliveryStatus"];
+export type WebhookDeliveryList = Schemas["WebhookDeliveryList"];
+export type WebhookTestResponse = Schemas["WebhookTestResponse"];
+export type WebhookDeliveriesParams = Query<"webhooksDeliveriesList">;
+
+// ---- Monitors -------------------------------------------------------------
+export type Monitor = Schemas["Monitor"];
+export type MonitorCreate = Schemas["MonitorCreate"];
+export type MonitorUpdate = Schemas["MonitorUpdate"];
+export type MonitorList = Schemas["MonitorList"];
+export type MonitorCheckOutcome = Schemas["MonitorCheckOutcome"];
+export type MonitorCheckResult = Schemas["MonitorCheckResult"];
+export type MonitorRunSummary = Schemas["MonitorRunSummary"];
+export type MonitorSiteDigest = Schemas["MonitorSiteDigest"];
+export type MonitorChange = Schemas["MonitorChange"];
+export type MonitorChangeList = Schemas["MonitorChangeList"];
+export type MonitorPage = Schemas["MonitorPage"];
+export type MonitorPageList = Schemas["MonitorPageList"];
+export type MonitorChangedEvent = Schemas["MonitorChangedEvent"];
+export type MonitorChangedSiteEvent = Schemas["MonitorChangedSiteEvent"];
+export type MonitorChangedPageEvent = Schemas["MonitorChangedPageEvent"];
+export type MonitorFailedEvent = Schemas["MonitorFailedEvent"];
+export type MonitorChangesParams = Query<"monitorsChanges">;
+export type MonitorPagesParams = Query<"monitorsPages">;
 
 // ---- Errors ---------------------------------------------------------------
 export type Problem = Schemas["Problem"];
