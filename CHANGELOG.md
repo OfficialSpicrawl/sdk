@@ -3,6 +3,16 @@
 All notable changes to `@spicrawl/sdk` are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## 0.2.1 — 2026-11-25
+
+Brand, webhooks and monitors.
+
+- **Brand assets** (`client.brand.get(url, { include, screenshot })`): a site's identity, logos, icons, colors, fonts, images, videos and social links from one rendered page load. Links only.
+- **Webhooks** (`client.webhooks`): `create` (returns the signing `secret` once), `list`, `get`, `update`, `delete`, `test`, `rotateSecret` and `deliveries`.
+- **Signature check:** `verifyWebhookSignature(rawBody, header, secret, { toleranceSeconds, now })` returns a boolean. It is synchronous and uses `node:crypto`.
+- **Monitors** (`client.monitors`): `create`, `list`, `get`, `update`, `delete`, `check`, `changes` and `pages`. A monitor watches one page or, with `scope: "site"`, a whole site; `pages()` pages through the tracked pages.
+- The bundled `openapi.yaml` and the generated types cover the new endpoints. No existing method changed.
+
 ## 0.2.0 — 2026-11-23
 
 - **Partner accounts** (`client.partner`) for platforms that resell Spicrawl: `summary()`, `balance()`, `usage()`; `users` (`list` with paging, `create`, `get`, `update`, `suspend`, `reactivate`, `setTier`, `giveCredits`, `usage`); and `tiers` (`list`, `create`, `update`, `delete`). `create` returns the user's API key, a credential: store it, do not log it.

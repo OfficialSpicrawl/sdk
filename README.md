@@ -58,6 +58,7 @@ It prints the page as Markdown, then the target site's status, the engine that r
 - **Batch jobs of up to 10,000 URLs per call** (100,000 per open job), with results streamed as JSON Lines.
 - **Sessions** that keep cookies and storage across scrapes, and **your own proxy** (HTTP, HTTPS, SOCKS5) on any request.
 - **Partner accounts:** provision a workspace, API key, shared balance and tiers for each of your own users.
+- **Brand assets** (logos, colors, fonts, links) from one rendered page load, **webhooks** with signed deliveries, and **monitors** that watch a page or a whole site for changes.
 - **Billing-safe retries:** a POST is retried only when the server provably did no work, so a retry never bills a scrape twice.
 - **Zero runtime dependencies**, ESM and CommonJS builds, and types generated from the OpenAPI spec.
 
@@ -244,13 +245,73 @@ for await (const u of platform.partner.users.list({ sort: "wallet_used" })) {
 - Tier changes and moves between tiers reach requests within about 60 seconds. `partner.usage({ group_by: "workspace" })` reports usage per user, and `partner.users.usage(id, { from, to })` reports one user.
 - `spicrawl.key()` reports the scopes and organization of the key a client holds, so code can tell a partner key from a workspace key.
 
+## Brand assets
+
+`brand.get()` returns a site's brand from one JavaScript-rendered page load: identity, logos, icons, colors, fonts, images, videos and social links. It returns links only; nothing is downloaded.
+
+```ts
+const brand = await spicrawl.brand.get("https://example.com", { include: ["logos", "colors"] });
+console.log(brand.identity?.name, brand.colors?.[0]?.hex, brand._meta.creditsCharged);
+```
+
+- Only the sections in `include` come back (all of them by default). Each section is capped, and a section that fails on the page is empty and named in `warnings`.
+- Billed like a JavaScript-rendered scrape. `screenshot: true` renders in a full browser and bills that tier. Each call bills again, so the SDK does not retry it after a failure that may have done the work.
+
+## Webhooks
+
+Webhook endpoints receive signed `batch.completed`, `batch.failed`, `monitor.changed` and `monitor.failed` events. The payload is a notification: fetch anything else you need with the API.
+
+```ts
+const { secret } = await spicrawl.webhooks.create({
+  url: "https://example.com/hooks/spicrawl",
+  events: ["monitor.changed"],
+  format: "json",
+});
+// Store `secret` now: it is shown once. Rotate it with rotateSecret().
+await spicrawl.webhooks.test(endpointId); // queues a signed ping
+```
+
+Verify every delivery against the raw request body, before you parse it:
+
+```ts
+import { verifyWebhookSignature } from "@spicrawl/sdk";
+
+const header = req.headers["x-spicrawl-signature"]; // X-Spicrawl-Signature: t=<unix>,v1=<hex>,kid=<n>
+const ok = verifyWebhookSignature(rawBody, String(header), process.env.WEBHOOK_SECRET!); // the whsec_ secret from create()
+if (!ok) return res.status(400).end();
+```
+
+- The header is `X-Spicrawl-Signature: t=<unix>,v1=<hex>,kid=<n>`. The signature is HMAC-SHA256, keyed with the `whsec_` secret's UTF-8 bytes, over `"<t>." + body`. The check is constant-time and rejects a timestamp more than `toleranceSeconds` (default 300) from `now`, in seconds.
+- It returns a boolean and is synchronous. It uses `node:crypto`, so it runs on Node.js (and Bun or Deno with Node compatibility); it is not for browsers.
+- `deliveries(id)` lists recent attempts, with status and `last_error`. A receiver that fails 100 deliveries in a row is disabled until you re-enable it.
+
+## Monitors
+
+A monitor watches one page, or with `scope: "site"` every page reachable from its URL on the same host. The first successful check records a baseline. Later checks report a change once `confirm_checks` checks in a row agree on the new content.
+
+```ts
+const monitor = await spicrawl.monitors.create({
+  url: "https://example.com/pricing",
+  webhook_endpoint_id: endpointId,
+  interval_seconds: 3600,
+  selector: ".plans",
+  js_render: true,
+});
+const result = await spicrawl.monitors.check(monitor.id); // check now: outcome "unchanged" | "changed" | "not_modified" | "failed"
+const { data: changes } = await spicrawl.monitors.changes(monitor.id, { limit: 10 });
+```
+
+- `create()` needs a `url`. Set `webhook_endpoint_id` to receive `monitor.changed` and `monitor.failed`. `interval_seconds` is 60 to 2,592,000. `max_credits_per_run` caps what one check may spend.
+- `pages(id)` lists the pages a site monitor tracks; a page that disappears stays listed with `removed_at`. A page monitor answers 404.
+- `delete()` stops the checks and removes the change history.
+
 ## Remote browser (coming soon)
 
 `spicrawl.browser.token()` and `spicrawl.browser.connectURL()` are typed for the remote CDP browser, which is **not available yet**. They exist so your code will not change when it launches. See the [CDP browser guide](https://docs.spicrawl.com/guides/cdp-browser).
 
 ## Pagination
 
-`batch.list()`, `sessions.list()`, `requests.list()` and `partner.users.list()` return a `PagePromise`. `await` it for one page, or `for await` it to walk every item on every page:
+`batch.list()`, `sessions.list()`, `requests.list()`, `partner.users.list()` and `monitors.pages()` return a `PagePromise`. `await` it for one page, or `for await` it to walk every item on every page:
 
 ```ts
 let page = await spicrawl.requests.list({ limit: 50 });

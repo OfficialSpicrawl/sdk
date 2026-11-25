@@ -1,10 +1,13 @@
 import { Transport, type ClientOptions, type RequestOptions } from "./core.js";
 import { Batch } from "./resources/batch.js";
+import { Brand } from "./resources/brand.js";
 import { Browser } from "./resources/browser.js";
+import { Monitors } from "./resources/monitors.js";
 import { Partner } from "./resources/partner.js";
 import { Requests } from "./resources/requests.js";
 import { Sessions } from "./resources/sessions.js";
 import { Usage } from "./resources/usage.js";
+import { Webhooks } from "./resources/webhooks.js";
 import type { KeyInfo, ResponseFormat, ResponseMeta, ScrapeEnvelope, ScrapeRequest, WithMeta } from "./types.js";
 
 /** Params for `scrape()`: everything except a non-JSON `response_format`. */
@@ -56,6 +59,12 @@ export class Spicrawl {
   readonly browser: Browser;
   /** Partner accounts: workspaces for your end users, one shared balance, tiers. Partner keys only. */
   readonly partner: Partner;
+  /** A site's brand assets: logos, colors, fonts, links, from one rendered page load. */
+  readonly brand: Brand;
+  /** Webhook endpoints that receive signed `batch.*` and `monitor.*` events. */
+  readonly webhooks: Webhooks;
+  /** Page and site monitors: watch a URL for changes and get notified. */
+  readonly monitors: Monitors;
 
   constructor(options: ClientOptions = {}) {
     this._transport = new Transport(options);
@@ -65,6 +74,9 @@ export class Spicrawl {
     this.usage = new Usage(this._transport);
     this.browser = new Browser(this._transport);
     this.partner = new Partner(this._transport);
+    this.brand = new Brand(this._transport);
+    this.webhooks = new Webhooks(this._transport);
+    this.monitors = new Monitors(this._transport);
   }
 
   get baseURL(): string {

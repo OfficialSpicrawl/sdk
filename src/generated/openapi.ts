@@ -18,7 +18,7 @@ export interface paths {
          *     How a request is rendered (cheapest first). You do not choose: Spicrawl picks the cheapest path that can do what the request asks.
          *     - Default (plain fetch, 1 credit): plain HTTP, no JavaScript, presenting a current browser TLS/HTTP2 fingerprint (`impersonate`, on by default and free; `impersonate=false` turns it off).
          *     - `js_render=true` (JavaScript rendering, 3 credits): content is built by JavaScript, or you need wait/wait_for/block_resources/network_capture.
-         *     - Screenshots, `response_format=pdf` and `actions` use full-browser rendering (8 credits). `stealth=true` (full-browser rendering hardened against bot detection, 25 credits) is coming soon.
+         *     - Screenshots, `response_format=pdf`, `actions` and `scroll_pages` use full-browser rendering (8 credits). `stealth=true` (full-browser rendering hardened against bot detection, 25 credits) is coming soon.
          *     - `mode=auto`: unsure - escalates through the available rendering tiers, bills only the tier that worked.
          *     - Managed proxy pools (`premium_proxy`) are coming soon; during the beta pass your own proxy with `proxy`.
          *     - The `engine` and `headless` fields are deprecated and ignored.
@@ -26,7 +26,7 @@ export interface paths {
          *
          *     Billing: failures cost 0 (errors, bot challenges, timeouts, target statuses other than 200/404/410 unless listed in allowed_status_codes, undelivered screenshots). A cache hit is billed at the same price as the fetch that stored it: the cache saves the fetch (latency and load on the target), not credits. Like any request, a hit is refused with 402 when the monthly allowance cannot cover its price. Check X-Credits-Charged.
          *
-         *     Bot challenges: a challenge page attributed to a named vendor (Cloudflare, DataDome, PerimeterX, Akamai) is never returned as a success. A fetch through a managed pool exit that meets one is retried once on a different exit, free (GET/HEAD/OPTIONS only, not with `sticky_key` or `session_id`, never on your own `proxy`). When you bring your own `proxy` (residential works best) and send no `mode=auto`, a request whose page is still a challenge is escalated automatically to stronger full-browser rendering on the same exit, which works through the interstitial and returns the real page; there is no flag to set. This is how Cloudflare-protected pages are supported. Automatic handling on managed premium exits is coming soon. Success is not guaranteed for every page. Only the tier that returned the page is billed (up to 25 credits, or the first tier's price), and 0 if every tier was challenged (502 ERR::UPSTREAM::CHALLENGE). On the default shared pool a challenged page may return that error; retry with your own residential `proxy`. A transport error, a refusal with no vendor marker (such as a bare 403) or a non-billable status such as 404 does not escalate. Escalation is skipped for a non-GET method, response_format=pdf, a screenshot, actions, a `proxy` that is not http://, or a max_cost below the escalated price; an allowance that covers the first attempt but not the escalation runs the request without it. X-Engine reports the rendering tier that served, each abandoned tier adds an `X-Warning: ESCALATED`, and diagnostics.attempts lists every attempt (in the JSON envelope on a successful escalation). Batch items never escalate.
+         *     Bot challenges: a challenge page attributed to a named vendor (Cloudflare, DataDome, PerimeterX, Akamai) is never returned as a success. A fetch through a managed pool exit that meets one is retried once on a different exit, free (GET/HEAD/OPTIONS only, not with `sticky_key` or `session_id`, never on your own `proxy`). When you bring your own `proxy` (residential works best) and send no `mode=auto`, a request whose page is still a challenge is escalated automatically to stronger full-browser rendering on the same exit, which works through the interstitial and returns the real page; there is no flag to set. This is how Cloudflare-protected pages are supported. Automatic handling on managed premium exits is coming soon. Success is not guaranteed for every page. Only the tier that returned the page is billed (up to 25 credits, or the first tier's price), and 0 if every tier was challenged (502 ERR::UPSTREAM::CHALLENGE). On the default shared pool a challenged page may return that error; retry with your own residential `proxy`. A transport error, a refusal with no vendor marker (such as a bare 403) or a non-billable status such as 404 does not escalate. Escalation is skipped for a non-GET method, response_format=pdf, a screenshot, actions, a `proxy` that is not http://, or a max_cost below the escalated price; an allowance that covers the first attempt but not the escalation runs the request without it. X-Engine reports the rendering tier that served, each abandoned tier adds an `X-Warning: ESCALATED`, and diagnostics.attempts lists every attempt (in the JSON envelope on a successful escalation). On a successful escalation the JSON envelope's `warnings` array carries the same `ESCALATED` entries. Batch items never escalate.
          *
          *     Status: the HTTP status is the platform's. A blocked or erroring site is usually still HTTP 200 - read envelope `status` or X-Target-Status for the site's answer. Errors are application/problem+json; retry only when `retryable` is true.
          *
@@ -41,7 +41,7 @@ export interface paths {
          *     How a request is rendered (cheapest first). You do not choose: Spicrawl picks the cheapest path that can do what the request asks.
          *     - Default (plain fetch, 1 credit): plain HTTP, no JavaScript, presenting a current browser TLS/HTTP2 fingerprint (`impersonate`, on by default and free; `impersonate=false` turns it off).
          *     - `js_render=true` (JavaScript rendering, 3 credits): content is built by JavaScript, or you need wait/wait_for/block_resources/network_capture.
-         *     - Screenshots, `response_format=pdf` and `actions` use full-browser rendering (8 credits). `stealth=true` (full-browser rendering hardened against bot detection, 25 credits) is coming soon.
+         *     - Screenshots, `response_format=pdf`, `actions` and `scroll_pages` use full-browser rendering (8 credits). `stealth=true` (full-browser rendering hardened against bot detection, 25 credits) is coming soon.
          *     - `mode=auto`: unsure - escalates through the available rendering tiers, bills only the tier that worked.
          *     - Managed proxy pools (`premium_proxy`) are coming soon; during the beta pass your own proxy with `proxy`.
          *     - The `engine` and `headless` fields are deprecated and ignored.
@@ -49,13 +49,43 @@ export interface paths {
          *
          *     Billing: failures cost 0 (errors, bot challenges, timeouts, target statuses other than 200/404/410 unless listed in allowed_status_codes, undelivered screenshots). A cache hit is billed at the same price as the fetch that stored it: the cache saves the fetch (latency and load on the target), not credits. Like any request, a hit is refused with 402 when the monthly allowance cannot cover its price. Check X-Credits-Charged.
          *
-         *     Bot challenges: a challenge page attributed to a named vendor (Cloudflare, DataDome, PerimeterX, Akamai) is never returned as a success. A fetch through a managed pool exit that meets one is retried once on a different exit, free (GET/HEAD/OPTIONS only, not with `sticky_key` or `session_id`, never on your own `proxy`). When you bring your own `proxy` (residential works best) and send no `mode=auto`, a request whose page is still a challenge is escalated automatically to stronger full-browser rendering on the same exit, which works through the interstitial and returns the real page; there is no flag to set. This is how Cloudflare-protected pages are supported. Automatic handling on managed premium exits is coming soon. Success is not guaranteed for every page. Only the tier that returned the page is billed (up to 25 credits, or the first tier's price), and 0 if every tier was challenged (502 ERR::UPSTREAM::CHALLENGE). On the default shared pool a challenged page may return that error; retry with your own residential `proxy`. A transport error, a refusal with no vendor marker (such as a bare 403) or a non-billable status such as 404 does not escalate. Escalation is skipped for a non-GET method, response_format=pdf, a screenshot, actions, a `proxy` that is not http://, or a max_cost below the escalated price; an allowance that covers the first attempt but not the escalation runs the request without it. X-Engine reports the rendering tier that served, each abandoned tier adds an `X-Warning: ESCALATED`, and diagnostics.attempts lists every attempt (in the JSON envelope on a successful escalation). Batch items never escalate.
+         *     Bot challenges: a challenge page attributed to a named vendor (Cloudflare, DataDome, PerimeterX, Akamai) is never returned as a success. A fetch through a managed pool exit that meets one is retried once on a different exit, free (GET/HEAD/OPTIONS only, not with `sticky_key` or `session_id`, never on your own `proxy`). When you bring your own `proxy` (residential works best) and send no `mode=auto`, a request whose page is still a challenge is escalated automatically to stronger full-browser rendering on the same exit, which works through the interstitial and returns the real page; there is no flag to set. This is how Cloudflare-protected pages are supported. Automatic handling on managed premium exits is coming soon. Success is not guaranteed for every page. Only the tier that returned the page is billed (up to 25 credits, or the first tier's price), and 0 if every tier was challenged (502 ERR::UPSTREAM::CHALLENGE). On the default shared pool a challenged page may return that error; retry with your own residential `proxy`. A transport error, a refusal with no vendor marker (such as a bare 403) or a non-billable status such as 404 does not escalate. Escalation is skipped for a non-GET method, response_format=pdf, a screenshot, actions, a `proxy` that is not http://, or a max_cost below the escalated price; an allowance that covers the first attempt but not the escalation runs the request without it. X-Engine reports the rendering tier that served, each abandoned tier adds an `X-Warning: ESCALATED`, and diagnostics.attempts lists every attempt (in the JSON envelope on a successful escalation). On a successful escalation the JSON envelope's `warnings` array carries the same `ESCALATED` entries. Batch items never escalate.
          *
          *     Status: the HTTP status is the platform's. A blocked or erroring site is usually still HTTP 200 - read envelope `status` or X-Target-Status for the site's answer. Errors are application/problem+json; retry only when `retryable` is true.
          *
          *     Not idempotent: there is no idempotency key, and each call bills again, whether it performs a new scrape or is served from cache. GET and POST accept the same parameters and behave identically.
          */
         post: operations["scrapePost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/brand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract a site's brand assets
+         * @description Returns a site's brand assets (identity, logos, icons, colors, fonts, images, videos and social links) from one rendered page load. The page is rendered once, with JavaScript, and a single script reads everything from the live DOM.
+         *
+         *     Links only. Nothing is downloaded, rehosted or returned as bytes: logos, icons, images and font files are URLs on the target site, and a logo's inline SVG markup is returned only when it is small enough (up to 100 KB) and otherwise as `null` with its URL kept. Videos are returned as platform or embed links with a poster image; a direct video file (.mp4, .webm, .mov, .m4v, .ogv, .m3u8, .mpd) is never returned, even when a `<video>` element uses one.
+         *
+         *     No LLM is used. Extraction is deterministic, from the page's markup, styles and metadata.
+         *
+         *     Use `include` to ask for only some sections. Only the sections you ask for appear in the response. Each section is capped (logos 10, icons 20, colors 12, fonts 10, images 50, videos 20, socials 20). A section that fails on the page is empty and named in `warnings`; the request still succeeds.
+         *
+         *     Billing: charged like a JavaScript-rendered scrape (`js_render=true`, 3 credits typically) with no surcharge. `screenshot=true` changes the rendering to full-browser and bills that tier instead. Failures cost 0. A cache hit is billed at the same price as the render that stored it, and the cache behaves as it does for `/v1/scrape`. Check `X-Credits-Charged`.
+         *
+         *     Not idempotent: each call bills again, whether it renders the page or is served from cache.
+         */
+        post: operations["brandPost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -317,6 +347,338 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List webhook endpoints
+         * @description Every webhook endpoint of the calling key's organization. Not paginated. The signing secret is
+         *     never returned by this route; see `POST /v1/webhooks` and `rotate-secret`.
+         *
+         *     Scope `webhooks`; the `read` scope is also accepted on every GET route under `/v1/webhooks`.
+         */
+        get: operations["webhooksList"];
+        put?: never;
+        /**
+         * Register a webhook endpoint
+         * @description Registers an HTTPS URL that receives signed notifications: `batch.completed` and `batch.failed` for batch
+         *     jobs, and `monitor.changed` and `monitor.failed` for monitors. Notify-only: the payload carries the job or
+         *     monitor summary, and you fetch anything else yourself.
+         *
+         *     The response is the endpoint plus `secret`, the signing secret. It is returned here and from
+         *     `rotate-secret` only, and is never shown again. Store it before you return from the call. Verify every
+         *     delivery with it (see the webhooks guide, "Verify signatures").
+         *
+         *     `events` defaults to `["batch.completed", "batch.failed"]`. `format` defaults to `json`. Use `slack` or
+         *     `discord` to post a one-line summary to a Slack or Discord incoming-webhook URL; the signature headers are
+         *     sent in every format.
+         *
+         *     A `ping` delivery is always sent by `POST /v1/webhooks/{webhookID}/test` and is not listed in `events`.
+         *
+         *     The URL must be `https://`, at most 2,048 characters, and must not point at a private or internal address.
+         *     An organization may hold at most 20 endpoints.
+         */
+        post: operations["webhooksCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{webhookID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id` returned by `POST /v1/webhooks`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a webhook endpoint
+         * @description One endpoint, with its health: `consecutive_failures`, `last_success_at`, `last_failure_at`, and
+         *     `enabled` with `disabled_reason` when the endpoint was switched off. Scope `webhooks` (or `read`).
+         */
+        get: operations["webhooksGet"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a webhook endpoint
+         * @description Removes the endpoint and stops deliveries to it. Its delivery history goes with it.
+         */
+        delete: operations["webhooksDelete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a webhook endpoint
+         * @description Send only the fields to change: `url`, `name`, `events`, `format` or `enabled`. Any other field is a 400.
+         *     The signing secret does not change here; use `rotate-secret`.
+         *
+         *     Setting `enabled` to `true` also clears `disabled_reason` and resets `consecutive_failures` to 0. An
+         *     endpoint is disabled automatically after 100 consecutive failed deliveries; re-enable it only once the
+         *     receiver is fixed.
+         */
+        patch: operations["webhooksUpdate"];
+        trace?: never;
+    };
+    "/v1/webhooks/{webhookID}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test ping
+         * @description Queues a `ping` delivery to the endpoint and returns at once with its `delivery_id`. Takes no body. The
+         *     delivery body is:
+         *
+         *     ```json
+         *     {"event":"ping","endpoint_id":"<id>","created_at":"2026-11-25T10:00:00Z"}
+         *     ```
+         *
+         *     The ping is signed like every delivery and follows the same retry ladder. Read `GET
+         *     /v1/webhooks/{webhookID}/deliveries` to see whether it arrived.
+         */
+        post: operations["webhooksTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{webhookID}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a new signing secret
+         * @description Generates a new secret, bumps `secret_version` and sets `secret_rotated_at`. The new `secret` is in the
+         *     response and is not shown again. The previous secret is kept on the server, but deliveries made after this
+         *     call are signed with the new secret only, and carry `kid` equal to the new `secret_version`. Update your
+         *     receiver before or as you rotate.
+         */
+        post: operations["webhooksRotateSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{webhookID}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List recent deliveries to an endpoint
+         * @description Newest first. One row per event and endpoint, not per attempt: `attempt` counts the tries so far and
+         *     `status` is the current state. `status` is `pending` (waiting for its first attempt or a retry),
+         *     `delivering` (an attempt is in flight), `delivered`, `failed` (will be retried, see `next_retry_at`) or
+         *     `dead` (the retry ladder ran out, or the target was refused by the SSRF guard). `last_error` says why the
+         *     last attempt failed.
+         */
+        get: operations["webhooksDeliveriesList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/monitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List monitors
+         * @description Every monitor of the calling key's organization. Not paginated. The captured content is never
+         *     returned; read the change history from `/v1/monitors/{monitorID}/changes`.
+         *
+         *     Scope `monitors`; the `read` scope is also accepted on every GET route under `/v1/monitors`.
+         */
+        get: operations["monitorsList"];
+        put?: never;
+        /**
+         * Create a monitor
+         * @description Starts watching one page, or with `scope: "site"` every page reachable from `url` on its exact host. The first
+         *     successful check records a baseline and reports no change. Later checks
+         *     report a change when the watched content differs from the last accepted version, after `confirm_checks`
+         *     checks in a row agree on the new version.
+         *
+         *     What is compared is the main content of the page, or the text of every element matched by `selector`. The
+         *     content is normalised first (runs of whitespace collapse, lines are trimmed, empty lines drop), so layout
+         *     churn does not count as a change.
+         *
+         *     `interval_seconds` defaults to the plan minimum and must be at least that. The interval adapts between the
+         *     plan minimum and the value you set: it shortens while the page changes and lengthens while it does not. See
+         *     `current_interval_seconds`.
+         *
+         *     Each check bills the same credits as the scrape that performed it: 1 credit for a plain fetch, more with
+         *     `js_render`. Checks are billed to the API key that created the monitor, and that key must stay valid.
+         *
+         *     `webhook_endpoint_id` must name an endpoint of this organization. Notifications go to it as
+         *     `monitor.changed` and `monitor.failed`, if those events are in its `events`.
+         *
+         *     A site monitor (`scope: "site"`) needs `max_pages`. Each run discovers the site's pages from `robots.txt`,
+         *     its sitemaps or the start page's links, fetches the changed ones and sends one `monitor.changed` digest for
+         *     the run. `confirm_checks` is ignored for site monitors. Each fetched page and each sitemap file costs a plain
+         *     scrape; a page skipped by its sitemap `lastmod` costs nothing. The Monitors section of the API reference has
+         *     the rules.
+         *
+         *     Plan limits: the number of monitors and the minimum interval depend on the plan. See the Monitors section
+         *     of the API reference.
+         */
+        post: operations["monitorsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/monitors/{monitorID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id` returned by `POST /v1/monitors`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a monitor
+         * @description One monitor, with its schedule and health: `current_interval_seconds`, `next_check_at`,
+         *     `consecutive_failures`, `last_error`, and `enabled` with `disabled_reason` when it was switched off.
+         *     Scope `monitors` (or `read`).
+         */
+        get: operations["monitorsGet"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a monitor
+         * @description Stops the checks and removes the monitor and its change history.
+         */
+        delete: operations["monitorsDelete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a monitor
+         * @description Send only the fields to change: `name`, `selector`, `interval_seconds`, `webhook_endpoint_id`,
+         *     `confirm_checks`, `js_render` or `enabled`. Any other field is a 400.
+         *
+         *     A disabled monitor stays disabled until you send `enabled: true`. That also clears `disabled_reason` and
+         *     `last_error`, resets `consecutive_failures` to 0, and makes the next check due now. Re-enable only once the
+         *     cause is fixed: the page is back, or the key and credits are good again.
+         */
+        patch: operations["monitorsUpdate"];
+        trace?: never;
+    };
+    "/v1/monitors/{monitorID}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a monitor now
+         * @description Runs one check immediately and returns when it is done. A check always fetches the page fresh; it never
+         *     serves a cached copy.
+         *
+         *     A check that changes the content creates a change event and queues `monitor.changed`, exactly as a scheduled
+         *     check does. The first successful check of a new monitor records the baseline and sends no event.
+         *
+         *     A check that could not read the page returns `outcome: failed`, and counts toward the auto-disable limit.
+         */
+        post: operations["monitorsCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/monitors/{monitorID}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List a monitor's changes
+         * @description The confirmed changes of one monitor, newest first. Each carries the diff from the previous content to the new
+         *     one. The baseline is not a change and is not listed. A site monitor lists one change per run that found
+         *     something: its `summary` holds the digest, and `diff` is null. Scope `monitors` (or `read`).
+         */
+        get: operations["monitorsChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/monitors/{monitorID}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List a site monitor's pages
+         * @description The pages a site monitor tracks, ordered by URL, a page per row. A page the monitor has stopped finding stays
+         *     in the list with `removed_at` set. Page monitors have no pages and answer 404. Scope `monitors` (or `read`).
+         */
+        get: operations["monitorsPages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -477,9 +839,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Coming soon. Open a DevTools Protocol (CDP) WebSocket to a cloud browser
-         * @description Coming soon.
-         *     A WebSocket upgrade, not a JSON endpoint. Connect with any CDP client, using the URL as its browser WebSocket endpoint. Authenticate with, in order of preference: `Authorization: Bearer <key>`
+         * Open a DevTools Protocol (CDP) WebSocket to a cloud browser
+         * @description A WebSocket upgrade, not a JSON endpoint. Connect with any CDP client, using the URL as its browser WebSocket endpoint. Authenticate with, in order of preference: `Authorization: Bearer <key>`
          *     on the upgrade; a single-use `token` from `POST /v1/browser/token` (60 s, one connection, bound to its
          *     options — the URL the CLI and MCP return); or the `apikey` query parameter (`api_key` alias), kept for
          *     ZenRows-style URLs. When `token` is present it is the only credential consulted. Requires the
@@ -539,9 +900,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Coming soon. Mint a single-use connect URL for /v1/browser
-         * @description Coming soon.
-         *     Returns a `/v1/browser` URL that carries a short-lived token instead of the API key, for CDP clients
+         * Mint a single-use connect URL for /v1/browser
+         * @description Returns a `/v1/browser` URL that carries a short-lived token instead of the API key, for CDP clients
          *     that accept only a URL. The key goes in the `Authorization` header of THIS request only (a query key
          *     is refused). The token is single-use, expires after 60 s, and is bound to the options in the body:
          *     connect with the URL unchanged. `path` is authoritative: the URL relative to the API base. `url` is
@@ -550,6 +910,115 @@ export interface paths {
          *     never logged and never stored in plaintext. Requires the `browser` scope.
          */
         post: operations["browserToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/browser/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Who controls a connected cloud browser
+         * @description The control state of a cloud browser session that is connected now. A session exists from its
+         *     connect until its socket closes; after that, and for another organization's session, this is 404.
+         *     Poll it after sending a person a live view, and continue once `controller` is `agent` again.
+         *     Requires the `browser` scope; the key in the `Authorization` header.
+         */
+        get: operations["browserSessionGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/browser/sessions/{id}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a live view link for a connected cloud browser
+         * @description A link a person opens to watch the cloud browser your CDP connection is driving and take control
+         *     of it: the same tabs, cookies and page. Use it when a page needs a human, such as a login, a
+         *     one-time code or a captcha. `live_view_url` is a page; `live_url` is its WebSocket, for building
+         *     your own viewer. Both carry a viewer token (`wbv_` and 64 hex characters) that works once and
+         *     expires 60 s after this call if unused; ask again for a new one.
+         *
+         *     While the person has control, your connection's input commands (`Input.*`), navigation
+         *     (`Page.navigate`, `Page.reload`, `Page.navigateToHistoryEntry`) and tab changes
+         *     (`Target.createTarget`, `Target.closeTarget`, `Target.activateTarget`) are answered with CDP error
+         *     -32001 instead of reaching the browser; reading the page keeps working. The viewer streams the
+         *     page and sends input only while it holds control. Watching is not billed beyond the session's
+         *     own per-minute price, and the live view ends when the session does. A browser that cannot take a
+         *     second viewer answers the live view's WebSocket with 409 `ERR::REQUEST::CONFLICT`.
+         */
+        post: operations["browserLiveView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/browser/sessions/{id}/takeover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand a connected cloud browser to a person
+         * @description Gives control to the person in the live view before they take it themselves. Your connection's
+         *     input, navigation and tab changes then fail with CDP error -32001 until control is released.
+         *     The person can also take and give back control from the live view.
+         */
+        post: operations["browserTakeover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/browser/sessions/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give a connected cloud browser back to the agent
+         * @description Gives control back to your CDP connection; its input and navigation reach the browser again.
+         */
+        post: operations["browserRelease"];
         delete?: never;
         options?: never;
         head?: never;
@@ -677,8 +1146,8 @@ export interface paths {
          *       `allowance.remaining_micro`. Its `used_micro` is the enforcement counter, which includes
          *       credits currently HELD for in-flight work (an open browser session holds its whole
          *       `session_ttl` price, a batch job holds the price of its unfinished items) as well as credits
-         *       spent. It is omitted when the deployment has no allowance counter, or when the counter could
-         *       not be read (a warning then says so).
+         *       spent. It is omitted when the deployment has no allowance counter, or when the counter or the
+         *       extra credits could not be read (a warning then says so).
          *     - `credits` is METERED usage from the usage rollup for the period: spent credits only, batch
          *       items included, but not credits held for work still running. It can therefore be lower than
          *       `allowance.used_micro`.
@@ -722,6 +1191,37 @@ export interface paths {
          *     - Defaults to yesterday (UTC); today is still accumulating.
          */
         get: operations["usageReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/usage/credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the credit grants and adjustments on the organization's account
+         * @description The organization's credit history: grants, adjustments, refunds, expiries, purchases, the
+         *     carried-over balance and credits assigned to or from a partner workspace (`transfer_out`,
+         *     `transfer_in`), newest first. Consumption is not listed; the daily rows of
+         *     `GET /v1/usage` say what was spent.
+         *
+         *     Each entry's `amount_micro` is the signed change to the spendable balance (micro-credits, 1
+         *     credit = 1000000). `label` is a fixed, customer-facing description chosen from the kind; it is
+         *     never free text. Operator notes, ticket references and the identity of whoever posted an entry
+         *     are not returned.
+         *
+         *     Paging is keyset: pass `next_cursor` back verbatim as `cursor`. `next_cursor` is `null` on the
+         *     last page.
+         */
+        get: operations["usageCredits"];
         put?: never;
         post?: never;
         delete?: never;
@@ -787,9 +1287,9 @@ export interface paths {
         };
         /**
          * What this API key is
-         * @description Returns the key's id, name, prefix, scopes, environment, organization, and whether the organization is a
-         *     partner account or a partner's workspace. Any valid key may call it; no scope is needed. The secret and
-         *     its hash are never returned. `Cache-Control: no-store`.
+         * @description Returns the key's id, name, prefix, scopes, environment, organization, and whether the key belongs to a
+         *     partner account (`partner`). Any valid key may call it; no scope is needed. The secret and its hash are
+         *     never returned. `Cache-Control: no-store`.
          */
         get: operations["keyInfo"];
         put?: never;
@@ -850,10 +1350,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The partner wallet
-         * @description `spent` is the all-time wallet charge across the partner's workspaces, `balance` is funded less spent,
-         *     and `available` is balance plus the credit line. The `*_credits` fields are the same values in whole credits.
-         *     Only `balance` can be assigned to users; the credit line cannot.
+         * The partner balance
+         * @description The partner's ACCOUNT credits for the current monthly window: the same credits its own requests use. `funded`
+         *     is the monthly allowance plus the extra credits available, `spent` is what the month has drawn (its own requests,
+         *     its users' draws and the credits it gave), and `balance` and `available` are what is left. `credit_line` is always
+         *     0. `resets_at` is when the window ends. `unlimited` is true for a partner with no ceiling; its figures then read 0.
+         *     The `*_credits` fields are the same values in whole credits.
          */
         get: operations["partnerWallet"];
         put?: never;
@@ -862,6 +1364,28 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/partner/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the partner's settings
+         * @description Sets `allow_account_spend`. When it is `true`, workspaces on the partner's Free plan may draw the partner's
+         *     account credits (after their free and given credits). Workspaces on a paid plan always may, so the setting does
+         *     not affect them. Takes effect within about 5 seconds.
+         */
+        patch: operations["partnerSettingsPatch"];
         trace?: never;
     };
     "/v1/partner/workspaces": {
@@ -875,10 +1399,15 @@ export interface paths {
          * List the partner's workspaces
          * @description Pages the workspaces this partner provisioned. Items carry no `api_key`. Each item has its usage figures
          *     (see `PartnerWorkspace`). `sort=external_user_id` (the default) pages by keyset: `next_after` is present
-         *     when the page is full; pass it as `after`. `sort=wallet_used` orders by the wallet-paid spend this window,
-         *     largest first, and pages by `offset`: `next_offset` is present when the page is full. The wallet sort is
-         *     on the usage records figure, which trails the live one by about 60 seconds; it reads every workspace of the
-         *     partner, so it costs more than the default sort.
+         *     when the page is full; pass it as `after`. `sort=wallet_used` orders by the balance spend this window,
+         *     largest first, and pages by `offset`: `next_offset` is present when the page is full. The `wallet_used`
+         *     sort is on usage records, which trail the live figure by about 60 seconds. It is computed over all of the
+         *     partner's workspaces, not only the page, so it is slower than the default sort, and noticeably slower for a
+         *     very large account.
+         *
+         *     `q` matches a workspace whose `external_user_id` starts with it (case-sensitive) or whose `display_name`
+         *     starts with it (case-insensitive). It is up to 100 characters with no control characters. There are no
+         *     wildcards: `%`, `_` and `*` match themselves. Other characters match display names only.
          */
         get: operations["partnerWorkspacesList"];
         put?: never;
@@ -927,6 +1456,10 @@ export interface paths {
          *     The optional body names the tier a new workspace starts on, by id or name. Without it the workspace
          *     gets the partner's default tier, or no tier when there is none. An existing workspace keeps its tier,
          *     but an unknown tier is `404` either way. Move a workspace with `PUT .../tier`.
+         *
+         *     The optional `display_name` is a label for your own reference. It is optional; use any label you like,
+         *     and avoid personal data you do not need to share. It is applied only when this call creates the workspace:
+         *     an existing workspace keeps its name whatever body you send. Change it with `PATCH`.
          */
         put: operations["partnerWorkspaceProvision"];
         post?: never;
@@ -935,10 +1468,12 @@ export interface paths {
         head?: never;
         /**
          * Set or clear a workspace's display name
-         * @description Sets the workspace's display name (1 to 100 characters), or clears it with `null`. Changes nothing else
-         *     and returns the workspace without its key.
+         * @description Sets the `display_name` of the workspace, or clears it. The body has one field: a string, or `null`.
+         *     A blank name after spaces at the ends are trimmed clears it, the same as `null`. A name is 1 to 100
+         *     characters after trimming, and a control character is refused. Any other field is refused. Returns the
+         *     workspace, without its `api_key`. Works on a closed workspace too.
          */
-        patch: operations["partnerWorkspaceUpdate"];
+        patch: operations["partnerWorkspaceSetDisplayName"];
         trace?: never;
     };
     "/v1/partner/workspaces/{external_user_id}/suspend": {
@@ -955,8 +1490,9 @@ export interface paths {
         /**
          * Suspend a workspace
          * @description Sets the workspace to `suspended` with the reason "suspended by partner". Its key is refused on
-         *     requests. Idempotent. A workspace already suspended (by the partner or by Spicrawl) is
-         *     returned as it stands: a suspension by Spicrawl keeps its reason. A closed workspace is
+         *     the API with `403 ERR::AUTH::FORBIDDEN`, detail "This workspace is suspended by its provider. Contact
+         *     your provider to restore access." Idempotent. A workspace already suspended (by the partner or by Spicrawl) is
+         *     returned as it stands: a Spicrawl suspension keeps its reason. A closed workspace is
          *     `409 ERR::REQUEST::CONFLICT`.
          */
         post: operations["partnerWorkspaceSuspend"];
@@ -980,10 +1516,71 @@ export interface paths {
         /**
          * Reactivate a workspace
          * @description Lifts a suspension the partner made. Idempotent. A closed workspace is `409 ERR::REQUEST::CONFLICT`.
-         *     A workspace suspended by Spicrawl (a suspension by Spicrawl) is `409 ERR::REQUEST::CONFLICT` with the
+         *     A workspace suspended by Spicrawl is `409 ERR::REQUEST::CONFLICT` with the
          *     problem "suspended by Spicrawl; contact support"; it is left suspended.
          */
         post: operations["partnerWorkspaceReactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search the index of job postings
+         * @description Searches Spicrawl's index of job postings in one synchronous call. The index is crawled from
+         *     company job boards on Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Recruitee, Breezy, Pinpoint,
+         *     Personio and Workday, from Y Combinator's job board, and from Wellfound's role listing pages (the newest postings on a set of them, not the whole site), and refreshed
+         *     about every 6 hours. The request reads the index; it does not fetch the boards.
+         *     Evergreen catch-all listings ("Join our Talent Community", "General application") are not indexed.
+         *
+         *     Results are ordered newest first, one page per call; pass `next_cursor` back as `cursor` for the next.
+         *     By default only open postings are returned (`status: open`). `status: closed` or `status: any` also
+         *     returns postings that left their board. A posting that leaves its board is marked `closed` and kept
+         *     for 30 days, then removed. `closed_at` is when the crawler noticed, up to one crawl interval after it
+         *     actually closed.
+         *
+         *     Filters: `seniority`, `employment_type`, `skills` (every listed skill must match), `language`, `country`,
+         *     `salary_min` with `salary_currency`, and `workplace`. Each one narrows results. `seniority` is read from
+         *     the job title, so most postings are `unknown`. `skills` are matched against a fixed vocabulary; a posting
+         *     whose description is not available only has skills found in its title. `salary_min` compares yearly
+         *     amounts within one currency and does not convert between currencies.
+         *
+         *     `include_description: true` adds each posting's plain text (capped at 20,000 characters) as `description`.
+         *     It makes responses much larger.
+         *
+         *     `visa_sponsorship` is `yes`, `no` or `unknown`. `visa_source` is `listed` when the platform publishes
+         *     it (YC, Wellfound) and `inferred` when read from the description text (the company job-board platforms); inferred values
+         *     can be wrong. `visa_sponsorship: true` narrows results a lot, because most postings are `unknown`.
+         *
+         *     Billing: 2 credits per request, including one that returns no results; 0 when billing is off. A failed
+         *     request costs 0. The price does not depend on `limit`. Subject to the key's normal rate limit.
+         *
+         *     With `find_contacts: true` the request also costs 5 credits for each posting that gets contacts; a posting
+         *     that already names people, or for which nothing is found, costs nothing extra, and a cached lookup costs
+         *     the same as a fresh one. The organization must have room for 2 + 5 × `limit` when the request starts.
+         *     `find_contacts` caps `limit` at 10 and can take up to about 30 seconds.
+         *
+         *     Unknown fields are a `400`. A search with a blank or missing `title` and no other filter is `400 ERR::REQUEST::MISSING_PARAMETER`; every
+         *     other invalid value is `400 ERR::REQUEST::INVALID_PARAMETER`, including an unknown skill, which the detail names.
+         *
+         *     Daily allowance: a workspace may run 5 searches per day (`SPICRAWL_JOBS_DAILY_LIMIT` on a self-hosted
+         *     deployment; 0 is unlimited). The day resets at 12:00 AM IST (18:30 UTC). Requests that pass validation
+         *     count; a `400`, a per-key rate-limit `429`, a `5xx` on our side and a `402` do not use one. Past the
+         *     allowance the request is refused with `429 ERR::LIMIT::DAILY_LIMIT_EXCEEDED`, which is not retryable
+         *     before the reset. The `X-Jobs-Daily-Limit`, `X-Jobs-Daily-Remaining` and `X-Jobs-Daily-Reset` headers
+         *     report the allowance on success and on that `429`.
+         */
+        post: operations["jobsSearch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1041,7 +1638,7 @@ export interface paths {
         /**
          * Change a tier
          * @description Changes the fields sent and leaves the rest. Every workspace on the tier gets the new limits, and any
-         *     workspace whose wallet cap is turned on from none gets its cap counter reset. Changes reach requests within about 60 seconds.
+         *     workspace whose balance cap is turned on from none has its cap reset. Changes reach requests within about 60 seconds.
          *     `"default": true` makes this tier the default; `false` is `400`. A duplicate name is `409`.
          */
         patch: operations["partnerTierUpdate"];
@@ -1060,7 +1657,7 @@ export interface paths {
         get?: never;
         /**
          * Move a workspace to a tier
-         * @description Moves the workspace to the named tier and applies that tier's limits and wallet cap. Changes reach
+         * @description Moves the workspace to the named tier and applies that tier's limits and balance cap. Changes reach
          *     requests within about 60 seconds. Returns the workspace.
          */
         put: operations["partnerWorkspaceSetTier"];
@@ -1087,12 +1684,13 @@ export interface paths {
          * Assign credits to a user
          * @description Moves credits from the partner's balance to this user's own balance. The user spends them after their free
          *     credits and before the partner's balance. They do not reset each month. The funded balance reaches requests
-         *     at once on the server that took the assignment, and within about 5 seconds on the others.
+         *     at once on the API process that took the assignment, and within about 5 seconds on the others.
          *
          *     Idempotent per `idempotency_key`: a repeat with the same key, the same `credits` and the same user returns
          *     `"applied": false` and changes nothing. A key reused with a different amount or user is
          *     `409 ERR::REQUEST::CONFLICT` and changes nothing. The partner can assign at most its balance (funded less
-         *     spent, never the credit line). More than that is `402 ERR::LIMIT::QUOTA_EXCEEDED`.
+         *     spent, never the credit line). More than that is `402 ERR::LIMIT::QUOTA_EXCEEDED`. The partner's record of the
+         *     assignment is a transfer out, and the workspace's is a transfer in.
          */
         post: operations["partnerWorkspaceAssignCredits"];
         delete?: never;
@@ -1156,7 +1754,7 @@ export interface components {
          *     whether it is retryable.
          * @enum {string}
          */
-        ErrorCode: "ERR::AUTH::MISSING_KEY" | "ERR::AUTH::INVALID_KEY" | "ERR::AUTH::REVOKED_KEY" | "ERR::AUTH::EXPIRED_KEY" | "ERR::AUTH::FORBIDDEN" | "ERR::AUTH::INSUFFICIENT_SCOPE" | "ERR::AUTH::INVALID_TOKEN" | "ERR::AUTH::INVALID_CREDENTIALS" | "ERR::AUTH::ENGINE_NOT_ENTITLED" | "ERR::REQUEST::INVALID" | "ERR::REQUEST::MISSING_PARAMETER" | "ERR::REQUEST::INVALID_PARAMETER" | "ERR::REQUEST::INCOMPATIBLE_FLAGS" | "ERR::REQUEST::NOT_FOUND" | "ERR::REQUEST::BEYOND_RETENTION" | "ERR::REQUEST::CONFLICT" | "ERR::REQUEST::PAYLOAD_TOO_LARGE" | "ERR::SECURITY::SSRF_BLOCKED" | "ERR::SECURITY::URL_BLOCKED" | "ERR::SECURITY::INVALID_URL" | "ERR::SESSION::NOT_FOUND" | "ERR::SESSION::EXPIRED" | "ERR::SESSION::RELEASED" | "ERR::SESSION::BUSY" | "ERR::SESSION::STATE_CORRUPT" | "ERR::LIMIT::RATE_LIMITED" | "ERR::LIMIT::CONCURRENCY_EXCEEDED" | "ERR::LIMIT::QUOTA_EXCEEDED" | "ERR::LIMIT::MAX_COST_EXCEEDED" | "ERR::LIMIT::SESSIONS_EXCEEDED" | "ERR::UPSTREAM::TIMEOUT" | "ERR::UPSTREAM::DNS_FAILED" | "ERR::UPSTREAM::TLS_FAILED" | "ERR::UPSTREAM::CONNECTION_RESET" | "ERR::UPSTREAM::TOO_MANY_REDIRECTS" | "ERR::UPSTREAM::ERROR" | "ERR::UPSTREAM::CHALLENGE" | "ERR::PROXY::EXHAUSTED" | "ERR::PROXY::UNREACHABLE" | "ERR::PROXY::AUTH_FAILED" | "ERR::PROXY::RATE_LIMITED" | "ERR::ENGINE::RENDER_FAILED" | "ERR::ENGINE::UNAVAILABLE" | "ERR::EXTRACT::FAILED" | "ERR::EXTRACT::INVALID_RULES" | "ERR::INTERNAL::ERROR" | "ERR::INTERNAL::UNAVAILABLE";
+        ErrorCode: "ERR::AUTH::MISSING_KEY" | "ERR::AUTH::INVALID_KEY" | "ERR::AUTH::REVOKED_KEY" | "ERR::AUTH::EXPIRED_KEY" | "ERR::AUTH::FORBIDDEN" | "ERR::AUTH::INSUFFICIENT_SCOPE" | "ERR::AUTH::INVALID_TOKEN" | "ERR::AUTH::INVALID_CREDENTIALS" | "ERR::AUTH::ENGINE_NOT_ENTITLED" | "ERR::REQUEST::INVALID" | "ERR::REQUEST::MISSING_PARAMETER" | "ERR::REQUEST::INVALID_PARAMETER" | "ERR::REQUEST::INCOMPATIBLE_FLAGS" | "ERR::REQUEST::NOT_FOUND" | "ERR::REQUEST::BEYOND_RETENTION" | "ERR::REQUEST::CONFLICT" | "ERR::REQUEST::PAYLOAD_TOO_LARGE" | "ERR::REQUEST::RETIRED" | "ERR::SECURITY::SSRF_BLOCKED" | "ERR::SECURITY::URL_BLOCKED" | "ERR::SECURITY::INVALID_URL" | "ERR::SESSION::NOT_FOUND" | "ERR::SESSION::EXPIRED" | "ERR::SESSION::RELEASED" | "ERR::SESSION::BUSY" | "ERR::SESSION::STATE_CORRUPT" | "ERR::LIMIT::RATE_LIMITED" | "ERR::LIMIT::CONCURRENCY_EXCEEDED" | "ERR::LIMIT::QUOTA_EXCEEDED" | "ERR::LIMIT::MAX_COST_EXCEEDED" | "ERR::LIMIT::SESSIONS_EXCEEDED" | "ERR::LIMIT::PARTNER_WORKSPACE_LIMIT" | "ERR::LIMIT::DAILY_LIMIT_EXCEEDED" | "ERR::UPSTREAM::TIMEOUT" | "ERR::UPSTREAM::DNS_FAILED" | "ERR::UPSTREAM::TLS_FAILED" | "ERR::UPSTREAM::CONNECTION_RESET" | "ERR::UPSTREAM::TOO_MANY_REDIRECTS" | "ERR::UPSTREAM::ERROR" | "ERR::UPSTREAM::CHALLENGE" | "ERR::PROXY::EXHAUSTED" | "ERR::PROXY::UNREACHABLE" | "ERR::PROXY::AUTH_FAILED" | "ERR::PROXY::RATE_LIMITED" | "ERR::ENGINE::RENDER_FAILED" | "ERR::ENGINE::UNAVAILABLE" | "ERR::EXTRACT::FAILED" | "ERR::EXTRACT::INVALID_RULES" | "ERR::INTERNAL::ERROR" | "ERR::INTERNAL::UNAVAILABLE";
         /**
          * @description RFC 7807 error body, served as `application/problem+json`. Switch on `code`;
          *     retry only when `retryable` is true, after `retry_after_seconds`.
@@ -1191,6 +1789,8 @@ export interface components {
             retry_after_seconds?: number;
             /** @description Non-fatal decisions the platform made for you, such as a flag ignored by proxy precedence. */
             warnings?: string[];
+            /** @description Advice for the caller, not a problem. On a failed scrape, the same text as diagnostics.hint (also sent on X-Note). */
+            notes?: string[];
             diagnostics?: components["schemas"]["ProblemDiagnostics"];
         };
         /** @description Where the request failed and whether the platform, the proxy or the target was at fault. */
@@ -1270,6 +1870,11 @@ export interface components {
              */
             stealth?: boolean;
             /**
+             * @description Solve the captcha widgets embedded in the page (Cloudflare Turnstile, reCAPTCHA v2, hCaptcha) before `actions` run. Selects full-browser rendering, as `stealth` does. Cannot be combined with mode=auto, which returns 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Blocking challenge pages are solved on full-browser renders without this flag when the platform has a provider configured. A successful solve adds 5 credits (see x-spicrawl-credits).
+             * @default false
+             */
+            solve_captcha?: boolean;
+            /**
              * @description Fetch tier only: present a current browser TLS/HTTP2 fingerprint, with matching browser headers and Accept-Encoding, to pass passive fingerprint checks. On by default, free, no JavaScript; `false` turns it off and the fetch uses a non-browser TLS handshake. Ignored on rendered requests. If omitted, the project's stored default applies, and `true` when the project sets none.
              * @default true
              */
@@ -1316,6 +1921,11 @@ export interface components {
             wait_for_timeout?: number;
             /** @description Ordered browser workflow (click, fill, scroll, ...), validated before anything is spent. Browser-only and makes the request uncacheable. A failed step ends the request at 0 credits unless that step has on_error=skip. */
             actions?: components["schemas"]["ScrapeAction"][];
+            /**
+             * @description Scroll to the bottom up to this many times before capture, stopping early once the page stops growing. For infinite-scroll pages (feeds, search results, social timelines) where only the first screen is in the page until scrolled. Shorthand for a trailing {"scroll": {"to_bottom": true, "max_iterations": N}} step after actions. Routes like actions: full-browser rendering. With neither js_render nor mode=auto it is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Out of range is 400 ERR::REQUEST::INVALID_PARAMETER. Refused on /v1/batch with 400 INVALID_PARAMETER. If scrolling stops early, the page is returned with the warning scroll_pages: scrolling stopped early: reason.
+             * @default 0
+             */
+            scroll_pages?: number;
             /** @description Subresource classes the browser must not load (plural and short aliases accepted, case-insensitive). If omitted, full-browser rendering blocks nothing, so images and fonts load, including for screenshot, pdf, actions and anti-bot escalation. A list blocks exactly the classes named and `none` (alone) blocks nothing. Any value other than `none` is browser-only. If omitted, the project's stored default applies. */
             block_resources?: ("none" | "document" | "documents" | "stylesheet" | "stylesheets" | "css" | "image" | "images" | "media" | "font" | "fonts" | "script" | "scripts" | "js" | "xhr" | "fetch" | "websocket" | "websockets" | "other")[];
             /**
@@ -1349,7 +1959,7 @@ export interface components {
             custom_headers?: {
                 [key: string]: string;
             };
-            /** @description Record the XHR/fetch responses the page itself made (often cleaner JSON than the DOM), returned under `network` in the JSON envelope. Browser-only; no extra credits. */
+            /** @description Record the XHR/fetch responses the page itself made (often cleaner JSON than the DOM), returned under `network` in the JSON envelope. Browser-only (`js_render` or `stealth`); no extra credits. */
             network_capture?: components["schemas"]["NetworkCapture"];
             /**
              * @description Harvest the page's own structured metadata (JSON-LD, OpenGraph, Twitter, microdata, RDFa, meta, embedded SPA state) into `data`, no selectors needed. Forces the JSON envelope; no extra credits; refused on a PDF.
@@ -1367,8 +1977,13 @@ export interface components {
             extract_preset?: string;
             /** @description Coming soon. Model-driven extraction into `data`; adds 4 credits. Refused with 503 ERR::INTERNAL::UNAVAILABLE where no model is configured, and a model failure is 502 ERR::EXTRACT::FAILED at 0 credits. Forces the JSON envelope. */
             ai_extract?: components["schemas"]["AIExtract"];
-            /** @description true strips nav/footer/aside to the main article; false keeps the whole document. Omitted keeps the pipeline default (main-content isolation on for markdown). Applies to markdown/text/cleaned output. If omitted, the project's stored default applies. */
+            /** @description true strips nav/footer/aside to the main article; false keeps the whole document. Omitted is on by default for markdown, text and json, and off for html; pass false to keep the whole page. Applies to markdown/text/cleaned output. A request or project value always wins. */
             main_content_only?: boolean;
+            /**
+             * @description Return `sections` (the main-content markdown split at its ATX headings) in the JSON envelope. Applies only to an explicit `response_format=json`; ignored for other formats.
+             * @default false
+             */
+            sections?: boolean;
             /** @description CSS selectors; keep only matching subtrees before extraction and markdown conversion. Applied before exclude_tags and main_content_only. */
             include_tags?: string[];
             /** @description CSS selectors; remove matching elements, applied after include_tags and before main_content_only. */
@@ -1379,7 +1994,7 @@ export interface components {
              */
             parse_pdf?: boolean;
             /**
-             * @description Body shape: html/markdown/text return the document itself, json the envelope, pdf a PDF printed by a real browser (needs full-browser rendering). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies.
+             * @description Body shape: html/markdown/text return the document itself, json the envelope (BREAKING CHANGE: an explicit json request now gets the main-content markdown as `content` and heading-split `sections`, not the raw HTML), pdf a PDF printed by a real browser (needs full-browser rendering). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies.
              * @default html
              * @enum {string}
              */
@@ -1395,7 +2010,7 @@ export interface components {
              */
             cache_ttl?: number;
             /**
-             * @description Credit ceiling; 0 means none. Checked against the dearest reachable outcome (the top rung under mode=auto) before anything runs, failing 400 ERR::LIMIT::MAX_COST_EXCEEDED at 0 credits.
+             * @description Credit ceiling; 0 means none. Checked against the dearest reachable outcome (the top rung under mode=auto) before anything runs, failing 400 ERR::LIMIT::MAX_COST_EXCEEDED at 0 credits. It is also the only way a bot-challenge climb may bill above the request's own price: a request is never billed above its own price unless `max_cost` or `mode=auto` allows it, so without `max_cost` a challenged request returns ERR::UPSTREAM::CHALLENGE at 0 credits rather than climbing to a browser. Set it to the browser rung's price to allow the climb.
              * @default 0
              */
             max_cost?: number;
@@ -1560,6 +2175,16 @@ export interface components {
                  * @default false
                  */
                 to_bottom?: boolean;
+                /**
+                 * @description With to_bottom, the most scroll-and-measure passes. Stops early once the page height stops changing. Refused with 400 unless to_bottom is true.
+                 * @default 10
+                 */
+                max_iterations?: number;
+                /**
+                 * @description With to_bottom, the wait after each pass before the page height is re-read, so lazy-loaded content can arrive. Refused with 400 unless to_bottom is true.
+                 * @default 1500
+                 */
+                settle_ms?: number;
                 /** @description Name echoed in diagnostics and screenshot labels; defaults to `<verb>[index]`. */
                 label?: string;
                 /** @description Per-step timeout in ms; omitted or <=0 uses the engine default. May also be placed inside the verb object. */
@@ -1734,7 +2359,7 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** @description Field name -> selector string or rule. A string may end in `@attr` (e.g. `a.next@href`) to return that attribute. 1-100 fields per level. */
+        /** @description Field name -> selector string or rule. A string may end in `@attr` (e.g. `a.next@href`) to return that attribute. A string may end in `[]` before any `@attr` (e.g. `.titleline > a[]`, `a[]@href`) to return every match as a list, the shorthand for a list rule. 1-100 fields per level. */
         ScrapeExtractSelectorMap: {
             [key: string]: string | components["schemas"]["ScrapeExtractRule"];
         };
@@ -1820,16 +2445,154 @@ export interface components {
             };
             hint?: string;
         };
+        /** @description Body of POST /v1/brand. Unknown fields are rejected with 400. */
+        BrandRequest: {
+            /**
+             * Format: uri
+             * @description Page to read. Required; must be http or https with a host. Private and reserved addresses are refused, as on /v1/scrape.
+             */
+            url: string;
+            /** @description Sections to return. Omitted means all of them. An unknown value is a 400. */
+            include?: ("identity" | "logos" | "icons" | "colors" | "fonts" | "images" | "videos" | "socials")[];
+            /**
+             * @description Also return a screenshot of the rendered page, as on /v1/scrape. Renders in full-browser mode and bills that tier.
+             * @default false
+             */
+            screenshot?: boolean;
+        };
+        /**
+         * @description Brand assets from one rendered page load. Sections not named in `include` are absent. Every URL is absolute.
+         *     Links only: no asset bytes are returned, and video files are never returned as direct media URLs.
+         */
+        BrandResponse: {
+            /** @description The URL requested. */
+            url: string;
+            /** @description The URL the page finally loaded from, after redirects. */
+            final_url: string;
+            identity?: {
+                name: string;
+                description: string;
+                language: string;
+                domain: string;
+                /** @description Hex colour of the page's theme-color meta tag, or null. */
+                theme_color: string | null;
+                /** @description The hero headline, the first visible h1 in the first viewport (or the largest heading there). Empty when there is none. */
+                tagline: string;
+                /** @description The supporting line under the hero headline, a p or h2-h4 of 20-300 characters. Empty when there is none. */
+                subtitle: string;
+                /** @description Primary calls to action in the hero, in page order. */
+                cta: {
+                    text: string;
+                    /** @description Absolute URL, or null for a button with no link. */
+                    url: string | null;
+                }[];
+            };
+            logos?: {
+                url: string | null;
+                /** @description Inline SVG markup when it is at most 100 KB; otherwise null and the URL is kept. */
+                svg: string | null;
+                /** @enum {string} */
+                format: "svg" | "png" | "jpg" | "webp" | "gif" | "ico" | "unknown";
+                width: number;
+                height: number;
+                /** @enum {string} */
+                source: "header" | "link_home" | "alt_or_class" | "jsonld" | "icon" | "og_image";
+                /** @enum {string} */
+                theme: "light" | "dark" | "unknown";
+                /** Format: float */
+                score: number;
+            }[];
+            icons?: {
+                url: string;
+                /** @enum {string} */
+                rel: "icon" | "apple-touch-icon" | "mask-icon" | "manifest" | "fallback";
+                sizes: string;
+                type: string;
+            }[];
+            colors?: {
+                hex: string;
+                /** @enum {string} */
+                role: "primary" | "secondary" | "accent" | "background" | "text" | "link";
+                /** @enum {string} */
+                source: "css_var" | "computed" | "theme_color";
+                /** Format: float */
+                confidence: number;
+            }[];
+            fonts?: {
+                family: string;
+                /** @enum {string} */
+                role: "heading" | "body" | "button" | "code";
+                weights: number[];
+                /** @enum {string} */
+                source: "google" | "adobe" | "self_hosted" | "system" | "unknown";
+                /** @description Absolute URLs of the font files, not downloaded. */
+                files: string[];
+            }[];
+            images?: {
+                url: string;
+                alt: string;
+                width: number;
+                height: number;
+                /** @enum {string} */
+                role: "og" | "twitter" | "hero" | "content";
+            }[];
+            /** @description Platform or embed links only. A direct media file is never returned. */
+            videos?: {
+                /** @enum {string} */
+                provider: "youtube" | "vimeo" | "loom" | "wistia" | "other";
+                id: string;
+                /** @description The page URL of the video. */
+                url: string;
+                embed_url: string;
+                poster: string | null;
+            }[];
+            socials?: {
+                /** @enum {string} */
+                network: "x" | "linkedin" | "github" | "instagram" | "youtube" | "facebook" | "tiktok" | "discord" | "threads" | "bluesky" | "mastodon" | "pinterest";
+                url: string;
+            }[];
+            /** @description Copied from the scrape envelope when `screenshot` was true. Same shape as on /v1/scrape. */
+            screenshot?: unknown;
+            /** @description Credits charged for the render, as on /v1/scrape. */
+            credits?: number;
+            /** @description The rendering tier that served the page (X-Engine). */
+            engine?: string;
+            /** @description Warnings from the page's brand script (a section that failed) and from the scrape envelope. */
+            warnings: string[];
+        };
         /** @description Returned for response_format=json, or whenever extract/autoparse/links/ai_extract/network_capture/screenshot is set. */
         ScrapeEnvelope: {
             /** @description The requested URL. */
             url: string;
-            /** @description URL after redirects; may be empty. */
+            /** @description URL after redirects; may be empty. Bot-challenge query parameters (`js_challenge`, `jsc_token`, `jsc_orig_r`, `__cf_chl_*`, and `solution` when one of the Reddit ones is present) are removed; every other parameter is kept. */
             final_url: string;
             /** @description The TARGET's HTTP status (not this response's). Anything other than 200/404/410 or allowed_status_codes was charged 0. */
             status: number;
-            /** @description The page in the requested rendering: html (cleaned html if extraction produced one), markdown or text. */
+            /** @description The page in the requested rendering: html (cleaned html if extraction produced one), markdown or text. For an explicit `response_format=json` it is the main-content markdown (the raw HTML is not returned; use response_format=html for that). A coerced envelope (html or markdown asked, extraction or screenshot forced json) keeps the rendering the caller asked for. */
             content: string;
+            /**
+             * @description Present only when the request sent `sections=true` with an explicit `response_format=json`, and only when `content` is the worker's markdown. The markdown split at its ATX headings (# to ######), in document order. Text before the first heading is a section with level 0 and an empty heading. A `#` line inside a fenced code block is not a heading. Empty list when the markdown has no content.
+             * @example [
+             *       {
+             *         "level": 1,
+             *         "heading": "Hacker News",
+             *         "text": "News aggregator."
+             *       },
+             *       {
+             *         "level": 2,
+             *         "heading": "History",
+             *         "text": "Founded in 2007."
+             *       }
+             *     ]
+             */
+            sections?: {
+                /** @description ATX heading depth (1-6); 0 for text before the first heading. */
+                level: number;
+                /** @description The heading text without its `#` marks; empty for level 0. */
+                heading: string;
+                /** @description The markdown under this heading, up to the next heading. */
+                text: string;
+            }[];
             /** @description The target's response headers. */
             headers: {
                 [key: string]: string;
@@ -1847,6 +2610,8 @@ export interface components {
             proxy_source: "pool" | "custom" | "direct";
             /** @description Human-readable warnings (messages only; codes are on X-Warning). */
             warnings: string[];
+            /** @description Advice for the caller, not a problem (also sent on X-Note). Currently a js_render suggestion for a page a plain fetch served that loads scripts (not sent under `mode=auto`), and a premium_proxy or stealth suggestion when the site refuses with 403, 429 or 503 (not sent under `mode=auto`, nor for a status listed in `allowed_status_codes`). */
+            notes?: string[];
             /** @description Output of extract, autoparse or ai_extract. */
             data?: Record<string, unknown>;
             /** @description Extraction rules that matched nothing - the usual sign a selector broke. */
@@ -1855,7 +2620,7 @@ export interface components {
             links?: string[];
             /** @description Delivered images only; undelivered ones are reported in warnings and charged 0. */
             screenshots?: components["schemas"]["ScrapeScreenshot"][];
-            /** @description Captured responses when network_capture was set. */
+            /** @description Captured responses. Present, possibly empty, whenever network_capture was set. */
             network?: components["schemas"]["ScrapeNetworkResponse"][];
             diagnostics?: components["schemas"]["ScrapeDiagnostics"];
         };
@@ -1867,7 +2632,7 @@ export interface components {
          */
         BatchJobStatus: "queued" | "running" | "paused" | "cancelling" | "completed" | "failed" | "cancelled";
         /**
-         * @description Terminal item status on a result line. `succeeded` is the only status that carries credits or a body. Items still `queued`/`running` are never returned.
+         * @description Terminal item status on a result line. `succeeded` is the only status that carries credits or a body. `succeeded` means a page was delivered; check `http_status`. A target error (HTTP 400 or above, other than 404 and 410) is still `succeeded`, is counted in the job's `target_errors`, and is not charged. Items still `queued`/`running` are never returned.
          * @enum {string}
          */
         BatchItemStatus: "succeeded" | "failed" | "cancelled" | "skipped";
@@ -1878,11 +2643,11 @@ export interface components {
          *     dashboard defaults underneath both. Validation happens for every item at submission.
          *
          *     What the batch worker executes: each item is one fetch or one render, and the document is returned as
-         *     `response_format` (`html` by default, `json`, `markdown` or `text`). A field is either honoured on a batch item
+         *     `response_format` (`html` by default, `markdown` or `text`). A field is either honoured on a batch item
          *     or refused at submission, never accepted and skipped. Refused with 400 INVALID_PARAMETER, naming every offending
-         *     field, with nothing queued or charged: `actions`, `screenshot` and its options, `network_capture`, `extract`,
+         *     field, with nothing queued or charged: `actions`, `scroll_pages`, `sections` (when true), `screenshot` and its options, `network_capture`, `extract`,
          *     `extract_preset`, `ai_extract`, `autoparse`, `links`, `session_id`, `cache`/`cache_ttl`, `original_status`,
-         *     `allowed_status_codes`, `parse_pdf=true`, `mode=auto`, `response_format=pdf`, and a non-GET `method` with
+         *     `allowed_status_codes`, `parse_pdf=true`, `mode=auto`, `response_format=pdf`, `response_format=json` when sent (the JSON envelope is /v1/scrape only), `solve_captcha`, and a non-GET `method` with
          *     `js_render` or `stealth`. A value that asks for nothing (`screenshot: false`, an empty list) is accepted. A
          *     refusal caused by a project default says so in `detail`. Use /v1/scrape for those fields.
          *
@@ -1896,6 +2661,8 @@ export interface components {
             js_render?: components["schemas"]["ScrapeRequest"]["js_render"];
             /** @description Coming soon. Render with full-browser rendering hardened against bot detection; takes precedence over `js_render`. Honoured by the batch worker. Default false (or the project default). */
             stealth?: components["schemas"]["ScrapeRequest"]["stealth"];
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
+            solve_captcha?: components["schemas"]["ScrapeRequest"]["solve_captcha"];
             /** @description Applied by the batch worker on fetched items. Default true, as on /v1/scrape; false on the item, the job or the project defaults opts out. */
             impersonate?: components["schemas"]["ScrapeRequest"]["impersonate"];
             /** @description `auto` is refused on batch with 400 INVALID_PARAMETER, also when it comes from the project defaults; the batch worker does not escalate. It runs the rendering that `js_render` or `stealth` selects. */
@@ -1925,6 +2692,10 @@ export interface components {
             wait_for_timeout?: components["schemas"]["ScrapeRequest"]["wait_for_timeout"];
             /** @description The batch worker does not run browser actions. A non-empty list is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             actions?: components["schemas"]["ScrapeRequest"]["actions"];
+            /** @description Refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
+            scroll_pages?: components["schemas"]["ScrapeRequest"]["scroll_pages"];
+            /** @description Refused on batch with 400 INVALID_PARAMETER when true; use /v1/scrape. */
+            sections?: components["schemas"]["ScrapeRequest"]["sections"];
             /** @description Resource classes to block while rendering. Honoured on rendered items only; unset blocks nothing on full-browser rendering, `none` blocks nothing, a list blocks the classes named. Falls back to the project default when unset. */
             block_resources?: components["schemas"]["ScrapeRequest"]["block_resources"];
             /**
@@ -1964,8 +2735,12 @@ export interface components {
             exclude_tags?: components["schemas"]["ScrapeRequest"]["exclude_tags"];
             /** @description The batch worker has no PDF parser. `true` is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. `false` is accepted. */
             parse_pdf?: components["schemas"]["ScrapeRequest"]["parse_pdf"];
-            /** @description Honoured. `html` (the default) and `json` return the document as retrieved; `markdown` and `text` run the same conversion as /v1/scrape. A document that is not HTML (a PDF, an image, JSON) fails a `markdown` or `text` item with EXTRACTION_FAILED; request `html` to get it as retrieved. `pdf` is refused with 400, also when it comes from the project defaults. */
-            response_format?: components["schemas"]["ScrapeRequest"]["response_format"];
+            /**
+             * @description Honoured. `html` (the default) returns the document as retrieved; `markdown` and `text` run the same conversion as /v1/scrape. `json` is refused with 400 INVALID_PARAMETER when you send it (a project default of `json` is ignored and runs as `html`): the JSON envelope exists only on /v1/scrape. A document that is not HTML (a PDF, an image, JSON) fails a `markdown` or `text` item with EXTRACTION_FAILED; request `html` to get it as retrieved. `pdf` is refused with 400, also when it comes from the project defaults.
+             * @default html
+             * @enum {string}
+             */
+            response_format?: "html" | "markdown" | "text";
             /** @description Batch never reads from the result cache. `true` is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
             cache?: components["schemas"]["ScrapeRequest"]["cache"];
             /** @description A non-zero value is refused on batch with 400 INVALID_PARAMETER (nothing queued or charged); use /v1/scrape. */
@@ -2039,7 +2814,7 @@ export interface components {
             failure_threshold?: number;
             /** @description Ceiling on the WHOLE run in whole credits; the worker stops charging work beyond it. Omit to use the job's projected cost; an `open` job then has no ceiling, because its projection covers only the items it was submitted with. Stored as given in `params.credit_budget_micro`. 0 or negative is a 400. Different from `max_cost`, which is per item. */
             credit_budget?: number;
-            /** @description Id of a webhook endpoint registered for this organization; it receives the job object when the job finishes (notify-only — fetch results yourself). A value that is not a valid id is a 400; blank is treated as absent. */
+            /** @description Id of a webhook endpoint registered for this organization; it receives the job object when the job finishes (notify-only — fetch results yourself). Register one with `POST /v1/webhooks` (its `id` is the value to send here) and list them with `GET /v1/webhooks`. An endpoint subscribed to `batch.completed` or `batch.failed` receives this job's event, signed with its own secret. A value that is not a valid id is a 400; blank is treated as absent. */
             webhook_endpoint_id?: string;
             /**
              * @description Keep the job accepting more items via POST /v1/batch/{batchID}/items. An open job never completes on its own — call POST /v1/batch/{batchID}/close when done. Total across appends is capped at 100,000 items.
@@ -2047,7 +2822,7 @@ export interface components {
              */
             open?: boolean;
         } & components["schemas"]["BatchScrapeParams"];
-        /** @description Live counters for the job, read from sharded counters. `completed` = succeeded + failed + cancelled + skipped; `remaining` = total − completed. */
+        /** @description Live counters for the job, read from sharded counters. `completed` = succeeded + failed + cancelled + skipped; `remaining` = total − completed. `succeeded` means a page was delivered; check each item's `http_status`. Target errors are counted in `target_errors` and are not charged. */
         BatchJobProgress: {
             /**
              * Format: int64
@@ -2061,9 +2836,14 @@ export interface components {
             completed: number;
             /**
              * Format: int64
-             * @description Items that succeeded. Only these are charged.
+             * @description Items that delivered a page (`succeeded` means a page was delivered, not that the target answered 2xx). Only these are charged, and only for a billable target status (200, 404, 410).
              */
             succeeded: number;
+            /**
+             * Format: int64
+             * @description Succeeded items whose target answered an error status (400 or above, other than 404 and 410). Each carries a warning. They are not charged, so they are not in `credits_charged`. Use this to tell how many successes the target refused.
+             */
+            target_errors: number;
             /**
              * Format: int64
              * @description Items that failed after all attempts. Re-run them with POST /v1/batch/{batchID}/retry.
@@ -2128,6 +2908,7 @@ export interface components {
          *         "failed": 0,
          *         "cancelled": 0,
          *         "skipped": 0,
+         *         "target_errors": 0,
          *         "remaining": 1,
          *         "percent_complete": 50,
          *         "credits_charged": 4,
@@ -2154,7 +2935,7 @@ export interface components {
             status_url: string;
             /** @description Relative path of the JSONL results: /v1/batch/{id}/results. */
             results_url: string;
-            /** @description The job-level scrape parameters as stored (your top-level BatchScrapeParams, without `url`), plus two keys the API sets and you cannot — `credit_budget_micro`, the run ceiling the worker enforces, and `default_proxy_tier` (`direct` or `datacenter`), the exit an item that sets no `proxy`, `premium_proxy`, `proxy_country` or `sticky_key` takes, decided at submission the way `/v1/scrape` decides it. Always present, possibly only those two. */
+            /** @description The job-level scrape parameters as stored (your top-level BatchScrapeParams, without `url`), plus two keys the API sets and you cannot — `credit_budget_micro`, the run ceiling the worker enforces, and `default_proxy_tier` (`direct`, `datacenter`, `residential` or `mobile`), the exit an item that sets no `proxy`, `premium_proxy`, `proxy_country` or `sticky_key` takes, decided at submission from the live proxy pool. It is `direct` only when the pool has no usable exit and the deployment allows direct exits; otherwise the pool's cheapest usable tier (`datacenter`, else `residential`, else `mobile`), billed as datacenter. Always present, possibly only those two. */
             params: {
                 [key: string]: unknown;
             };
@@ -2254,7 +3035,7 @@ export interface components {
          *     (no content, page budget spent); `unavailable` (the file could not be read).
          */
         BatchResultBody: {
-            /** @description The document as plain text, in the item's `response_format` (the HTML, markdown or text itself). It is the line's ordinary JSON string, already decoded by your JSON parser once, so do not decode it again. For `response_format` `json` it is the JSON document as a string (the body as retrieved), which you parse to get the object. May be a byte prefix when `truncated`. */
+            /** @description The document as plain text, in the item's `response_format` (the HTML, markdown or text itself). It is the line's ordinary JSON string, already decoded by your JSON parser once, so do not decode it again. May be a byte prefix when `truncated`. */
             content?: string;
             /**
              * Format: int64
@@ -2302,7 +3083,7 @@ export interface components {
             status: components["schemas"]["BatchItemStatus"];
             /** @description How many times this item was tried (not reset by retry). */
             attempts: number;
-            /** @description The TARGET site's HTTP status, not the API's. Absent when no response was received. A 404 here is a successful scrape of a missing page. */
+            /** @description The TARGET site's HTTP status, not the API's. Absent when no response was received. A 404 here is a successful scrape of a missing page. An error status (400 or above, other than 404 and 410) on a `succeeded` item means the target refused. The item is not charged, and its `warnings` say so. */
             http_status?: number;
             /** @description Id of the underlying request; look it up in request history for diagnostics. */
             request_id?: string;
@@ -2667,10 +3448,10 @@ export interface components {
             /** @description True when the exit was pinned. Absent when false. */
             sticky?: boolean;
             /**
-             * @description Why this source was chosen. `session_proxy_unavailable` is a request in a session that records a datacenter exit on a deployment with no proxy pool; it went direct. Absent means unknown (older records), not a default.
+             * @description Why this source was chosen. `no_pool_available` is a request that named no proxy preference and went direct because the pool had no usable exit. `session_proxy_unavailable` is a request in a session that records a datacenter exit on a deployment with no proxy pool; it went direct. `pool_no_datacenter` is a request that named no proxy preference and was served by a residential or mobile exit because the pool has no usable datacenter exit; it is billed at the datacenter price. `challenge_escalation` is a datacenter-exit request that met a bot challenge and was retried once from a residential exit; it is billed at the datacenter price. `configured_direct` is legacy and appears only on old records. Absent means unknown (older records), not a default.
              * @enum {string}
              */
-            reason?: "caller_proxy" | "configured_direct" | "no_pool_available" | "session_proxy_unavailable";
+            reason?: "caller_proxy" | "configured_direct" | "no_pool_available" | "session_proxy_unavailable" | "pool_no_datacenter" | "challenge_escalation";
             /** @description Every exit the request touched, in attempt order. Several entries mean retries moved exits. */
             endpoints?: string[];
         };
@@ -2897,9 +3678,14 @@ export interface components {
             used_micro: number;
             /**
              * Format: int64
-             * @description `limit_micro` minus `used_micro`, never negative. 0 when `unlimited`.
+             * @description What the organization can still spend: `limit_micro` minus `used_micro` (never negative) plus `extra_micro`. 0 when `unlimited`.
              */
             remaining_micro: number;
+            /**
+             * Format: int64
+             * @description Extra credits the organization holds on top of the monthly limit (credits granted to it, by an operator or as the onboarding bonus, or refunded). They are spent after the monthly allowance and are kept when the allowance month resets. Already included in `remaining_micro`. Read from Postgres when the working balance is not yet loaded, so a granted credit shows here before the organization makes its first request.
+             */
+            extra_micro?: number;
             /**
              * Format: date-time
              * @description Start of the allowance month, 00:00 UTC on the day of the month the organization was created.
@@ -2935,6 +3721,29 @@ export interface components {
              * @enum {string}
              */
             action: "missing_in_usage_daily" | "absent_from_request_log" | "undercounted" | "overcounted";
+        };
+        CreditItem: {
+            /** @description Identifier of the credit transaction. */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the transaction took effect (RFC 3339, UTC).
+             */
+            created_at: string;
+            /**
+             * Format: int64
+             * @description Signed change to the spendable balance, in micro-credits. Positive for a grant or a transfer in, negative for an expiry or a transfer out.
+             */
+            amount_micro: number;
+            /** @enum {string} */
+            kind: "promo_grant" | "plan_grant" | "adjustment" | "refund" | "expiry" | "purchase" | "migration" | "transfer_out" | "transfer_in";
+            /** @description Fixed customer-facing description. One of: Onboarding bonus, Plan allowance, Credits added by Spicrawl, Refund, Credit adjustment, Credits expired, Credit purchase, Wallet top-up, Balance carried over, Transfer out, Transfer in. */
+            label: string;
+        };
+        CreditsResponse: {
+            items: components["schemas"]["CreditItem"][];
+            /** @description Pass verbatim as `cursor` to fetch the next page. `null` on the last page. */
+            next_cursor: string | null;
         };
         UsageReconciliation: {
             /**
@@ -3041,7 +3850,7 @@ export interface components {
             credits_micro: number;
             /**
              * Format: int64
-             * @description The part of the charge paid from the partner wallet.
+             * @description The part of the charge paid from the partner's balance.
              */
             credits_wallet_micro: number;
             /**
@@ -3057,7 +3866,10 @@ export interface components {
             /** @description The workspace's organization id. */
             workspace_id: string;
             external_user_id: string;
-            /** @description The name the partner gave this user, shown to the partner only. Set on create or with PATCH; null when unset. */
+            /**
+             * @description The label the partner gave the workspace, or `null`. Set on `PUT` when that call creates the workspace,
+             *     or with `PATCH`. Optional. The workspace's own key reports it as `organization.name` on `GET /v1/key`, so the end user can read it.
+             */
             display_name?: string | null;
             /**
              * @description `deleted` when the workspace has been soft-deleted by Spicrawl support. A deleted workspace keeps
@@ -3067,10 +3879,10 @@ export interface components {
             status: "active" | "suspended" | "closed" | "deleted";
             /** Format: date-time */
             created_at: string;
-            /** @description The workspace's monthly allowance, in whole credits, as set for the partner. */
+            /** @description The workspace's monthly allowance, in whole credits, as set for the partner. Always 0 while the partner is on a paid plan. */
             free_credits: number;
             /**
-             * @description The most this workspace may draw from the partner's shared wallet in one allowance month, in whole
+             * @description The most this workspace may draw from the partner's balance in one allowance month, in whole
              *     credits. Its own setting when Spicrawl set one, else the partner's default. `null` when it has no
              *     cap. Free credits and the workspace's own balance are not counted against it. A request that would
              *     need more than the cap left is refused with `402 ERR::LIMIT::QUOTA_EXCEEDED` ("...reached its spending
@@ -3089,10 +3901,11 @@ export interface components {
             /**
              * @description Where `wallet_cap` comes from. `tier`: the workspace's tier sets it. `workspace`: Spicrawl set it on
              *     this workspace while it is on no tier. `account_default`: the partner's default (a tier with no cap
-             *     falls back to it). `none`: no cap.
+             *     falls back to it). `plan_default`: the partner's paid plan sets it (none of the above is set). `none`:
+             *     no cap, which only happens on the Free plan.
              * @enum {string}
              */
-            wallet_cap_source?: "tier" | "workspace" | "account_default" | "none";
+            wallet_cap_source?: "tier" | "workspace" | "account_default" | "plan_default" | "none";
             /**
              * Format: date-time
              * @description When the workspace's current allowance month ends (its monthly anniversary), RFC 3339 UTC.
@@ -3105,8 +3918,8 @@ export interface components {
              */
             wallet_used?: number | null;
             /**
-             * @description `live` when read from the live cap counter, which is current. `rollup` when read from usage records,
-             *     which trails by about 60 seconds. Null when `wallet_used` is null.
+             * @description `live` when read from the live counter, which is current. `rollup` when read from usage records,
+             *     which trail by about 60 seconds. Null when `wallet_used` is null.
              * @enum {string|null}
              */
             wallet_used_source?: "live" | "rollup" | null;
@@ -3121,16 +3934,12 @@ export interface components {
         };
         /** @description The single-workspace read. Same fields as `PartnerWorkspace`; kept as a name for existing clients of the spec. */
         PartnerWorkspaceDetail: components["schemas"]["PartnerWorkspace"];
-        PartnerWorkspaceUpdate: {
-            /** @description The new display name, or null to clear it. */
-            display_name: string | null;
-        };
         PartnerTier: {
             /** @description Spicrawl's id for the tier. */
             id: string;
             /** @description Unique among the partner's tiers, ignoring case. */
             name: string;
-            /** @description Requests per minute a user may make to scrape, and cloud browser sessions a user may start. Cannot exceed the partner's ceiling (60 times its requests per second). */
+            /** @description Requests per minute a user may make to scrape, and cloud browser sessions a user may start. Cannot exceed the partner's ceiling (60 times its requests per second). The bucket holds ten seconds' worth, so at 6 a minute only one request may arrive at once; a request past it is `429 ERR::LIMIT::RATE_LIMITED` with `Retry-After`. */
             requests_per_minute: number;
             /** @description Requests and browser sessions a user may run at once. Cannot exceed the partner's concurrency limit. */
             concurrency: number;
@@ -3193,7 +4002,7 @@ export interface components {
             user_credits: number;
             /**
              * Format: int64
-             * @description The partner's assignable balance (funded less spent, floored at zero, credit line excluded) after this assignment, in whole credits. The name is kept for compatibility.
+             * @description The partner's assignable balance (funded less spent, floored at zero, credit line excluded) after this assignment, in whole credits. The field name is kept for compatibility.
              */
             balance_available: number;
         };
@@ -3213,6 +4022,8 @@ export interface components {
         PartnerSummary: {
             /** @description Always true for a partner account. */
             partner: boolean;
+            /** @description Whether Free-plan workspaces may draw the partner's account credits (PATCH /v1/partner/settings). */
+            allow_account_spend: boolean;
             /** Format: uuid */
             org_id: string;
             /** @description The partner's default monthly allowance per workspace, in whole credits. */
@@ -3240,7 +4051,7 @@ export interface components {
                 /** @description Active workspaces with no effective cap. They are not in `committed`. */
                 uncapped_users: number;
             };
-            /** @description The same figures as `GET /v1/partner/wallet`. Only `balance_credits` can be assigned to users. */
+            /** @description The same figures as `GET /v1/partner/wallet` (the partner's account credits for this month). Only `balance_credits` can be given to users. */
             balance: {
                 funded_credits: number;
                 credit_line_credits: number;
@@ -3274,17 +4085,629 @@ export interface components {
             organization: {
                 /** Format: uuid */
                 id: string;
+                /**
+                 * @description The organization's name. For a partner's workspace it is the workspace's display name, else its
+                 *     `external_user_id`; it never shows the partner's name.
+                 */
                 name: string;
             };
-            /** @description True when the key's organization is a partner account. */
+            /** @description True only for the key of a partner account. A partner's workspace key reports false. */
             partner: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             expires_at?: string | null;
         };
+        JobSearchRequest: {
+            /**
+             * @description Words to match in the job title. Web-search syntax: `backend engineer` matches both words,
+             *     `"staff engineer"` a phrase, `engineer -senior` excludes a word, `ml or "machine learning"`
+             *     matches either. Optional: a blank title is treated as absent. Without a title, the request
+             *     must carry at least one filter (`posted_within`, `region`, `country`, `workplace`,
+             *     `visa_sponsorship: true`, `platforms`, `seniority`, `employment_type`, `skills`, `language`
+             *     or `salary_min`), or it is a `400` with `ERR::REQUEST::MISSING_PARAMETER`.
+             * @example backend engineer -senior
+             */
+            title?: string;
+            /**
+             * @description Only postings first seen within this window, as hours (`1h` to `72h`) or days (`1d` to `30d`).
+             *     Omitted means any age. Results are only as fresh as the crawl: boards are re-read about every
+             *     6 hours, so a posting from the last hour may not be indexed yet.
+             * @example 6h
+             * @example 24h
+             * @example 7d
+             */
+            posted_within?: string;
+            /**
+             * @description A country name or code, or a city. Matched case-insensitively against the posting's
+             *     location text and its country.
+             * @example Berlin
+             */
+            region?: string;
+            workplace?: ("remote" | "hybrid" | "onsite")[];
+            /** @description `true` returns only postings known to sponsor. Most postings are `unknown`, so this narrows results a lot. */
+            visa_sponsorship?: boolean;
+            /** @description Omitted or empty means all platforms. */
+            platforms?: ("greenhouse" | "lever" | "ashby" | "yc" | "wellfound" | "techtree" | "reddit" | "workable" | "smartrecruiters" | "recruitee" | "breezy" | "pinpoint" | "personio" | "workday")[];
+            /**
+             * @description With find_contacts set to true, the maximum is 10 and the default is 10. A larger value is a `400`.
+             * @default 25
+             */
+            limit?: number;
+            /** @description The `next_cursor` from the previous page, passed back verbatim. */
+            cursor?: string;
+            /**
+             * @description Look up company-level contacts for postings that name none: Y Combinator founders, and names from
+             *     a company's own team or about page. Adds `contacts_found` to the response, caps `limit` at 10, and
+             *     costs 5 credits per posting that gets contacts. Can take up to about 30 seconds. Returns names and
+             *     roles only, never email addresses or phone numbers. A `400` on a deployment without contact lookup.
+             * @default false
+             */
+            find_contacts?: boolean;
+            /**
+             * @description Any of the listed levels. Read from the job title only, and most titles carry no level, so most
+             *     postings are `unknown` and this filter narrows results a lot.
+             */
+            seniority?: ("intern" | "entry" | "mid" | "senior" | "lead" | "executive")[];
+            /** @description Any of the listed types. Taken from the platform's field where it has one (English, German, Dutch, French and Spanish values are understood), otherwise from an unambiguous title tag such as an internship word or `(Contract)`. */
+            employment_type?: ("full_time" | "part_time" | "contract" | "internship" | "temporary")[];
+            /**
+             * @description Every skill listed must match. An empty array is the same as omitting the field. Aliases are accepted (`golang` is `go`, `k8s` is `kubernetes`,
+             *     `postgres` is `postgresql`). An unknown skill is a `400` that names it. Matched against a fixed
+             *     vocabulary in the title and description; a posting whose description is not available only has
+             *     skills found in its title.
+             * @example [
+             *       "go",
+             *       "postgresql"
+             *     ]
+             */
+            skills?: string[];
+            /**
+             * @description ISO 639-1 code of the language the posting is written in, such as `en`. Matched case-insensitively. Detected from the posting text. An empty string is the same as omitting the field.
+             * @example en
+             */
+            language?: string;
+            /**
+             * @description ISO 3166-1 alpha-2 code, such as `DE`. Matched case-insensitively. An empty string is the same as
+             *     omitting the field. Matches the platform's country field or the
+             *     location text. Independent of `region`, which is a substring match on the location.
+             * @example DE
+             */
+            country?: string;
+            /**
+             * @description A yearly amount. Returns postings whose published yearly salary, in `salary_currency`, reaches it.
+             *     No exchange-rate conversion. Hourly and monthly salaries are converted to a year at 2080 hours and
+             *     12 months. Postings that publish no salary never match.
+             * @example 100000
+             */
+            salary_min?: number;
+            /**
+             * @description ISO 4217 code, upper-cased. Defaults to `USD` when `salary_min` is set. A `400` when given without `salary_min`.
+             * @example EUR
+             */
+            salary_currency?: string;
+            /**
+             * @description `open` returns open postings only, which is the default. `closed` returns postings that left their
+             *     board and are kept for 30 days. `any` returns both.
+             * @default open
+             * @enum {string}
+             */
+            status?: "open" | "closed" | "any";
+            /**
+             * @description Adds `description`, the posting's plain text capped at 20,000 characters, to each job. Responses become much larger.
+             * @default false
+             */
+            include_description?: boolean;
+        };
+        JobSearchResponse: {
+            /** @description Newest first. */
+            jobs: components["schemas"]["JobPosting"][];
+            /** @description Pass it back as `cursor` to read the next page. */
+            next_cursor?: string;
+            /**
+             * @description Credits charged for this request. 2, or 0 when billing is off. With `find_contacts`, add 5 for each posting that got contacts.
+             * @example 2
+             */
+            credits_used: number;
+            /** @description Number of postings that got at least one contact from the `find_contacts` lookup. Present only when `find_contacts` was `true`. */
+            contacts_found?: number;
+        };
+        JobPosting: {
+            /**
+             * @description Stable id, `<platform>:<platform id>`.
+             * @example greenhouse:4012345
+             */
+            id: string;
+            /** @enum {string} */
+            platform: "greenhouse" | "lever" | "ashby" | "yc" | "wellfound" | "techtree" | "reddit" | "workable" | "smartrecruiters" | "recruitee" | "breezy" | "pinpoint" | "personio" | "workday";
+            title: string;
+            company: string;
+            /** @description Empty when the platform does not give one. */
+            company_url: string;
+            /**
+             * Format: uri
+             * @description The posting itself. The plain-text description is returned only with `include_description`; otherwise fetch this URL with `POST /v1/scrape`.
+             */
+            url: string;
+            /**
+             * Format: uri
+             * @description The platform's own apply link when it publishes one (Lever, Ashby, YC, Workable, Recruitee), otherwise the same as `url`. Always present and never empty.
+             */
+            apply_url: string;
+            /** @description The location text as the platform gives it. */
+            location: string;
+            /** @description Filled only when the platform gives a structured country. Empty otherwise. */
+            country: string;
+            /**
+             * @description ISO 3166-1 alpha-2 code derived from the country field or the location text. Absent for Remote, Worldwide or unparseable locations.
+             * @example DE
+             */
+            country_code?: string;
+            /**
+             * @description From the platform's own field where one exists (Lever, Ashby), otherwise read from the location text.
+             * @enum {string}
+             */
+            workplace: "remote" | "hybrid" | "onsite" | "unknown";
+            /**
+             * @description Read from the job title. `unknown` when the title carries no level, which is most postings.
+             * @enum {string}
+             */
+            seniority: "intern" | "entry" | "mid" | "senior" | "lead" | "executive" | "unknown";
+            /**
+             * @description From the platform's field where it has one (English, German, Dutch, French and Spanish values are understood), otherwise from an unambiguous title tag such as an internship word or `(Contract)`. `unknown` when neither says.
+             * @enum {string}
+             */
+            employment_type: "full_time" | "part_time" | "contract" | "internship" | "temporary" | "unknown";
+            /**
+             * @description Canonical skill names found in the title and description (or title only, when no description is available). Empty array when none are found.
+             * @example [
+             *       "go",
+             *       "postgresql"
+             *     ]
+             */
+            skills: string[];
+            /** @description ISO 639-1 code of the language the posting is written in, detected from its text. Absent when not confident. */
+            language?: string;
+            /**
+             * @description Whether the posting sponsors. Most postings are `unknown`.
+             * @enum {string}
+             */
+            visa_sponsorship: "yes" | "no" | "unknown";
+            /**
+             * @description `listed` when the platform publishes sponsorship as a field (YC, Wellfound). `inferred` when Spicrawl read it from the description text, which can be wrong. Absent when the value is unknown.
+             * @enum {string}
+             */
+            visa_source?: "listed" | "inferred";
+            salary?: components["schemas"]["JobSalary"];
+            /**
+             * Format: date-time
+             * @description When the posting was published. `null` when the platform gives no date. For YC this is approximate, because the source shows relative ages.
+             */
+            posted_at: string | null;
+            /**
+             * @description `closed` when the posting left its board. The crawler notices up to one crawl interval after it closed.
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /**
+             * Format: date-time
+             * @description When the crawler first indexed the posting.
+             */
+            first_seen_at: string;
+            /**
+             * Format: date-time
+             * @description When the crawler last saw the posting on its board.
+             */
+            last_seen_at: string;
+            /**
+             * Format: date-time
+             * @description When the crawler noticed the posting had left its board. Absent while the posting is open. Closed postings are removed 30 days later.
+             */
+            closed_at?: string;
+            /** @description The posting's plain text. Present only when `include_description` was `true`. May be empty when the description is not available. */
+            description?: string;
+            /** @description Hiring contacts. Usually empty. Entries from the posting itself (YC hiring managers; Wellfound founders and hiring contact), and, with `find_contacts`, contacts found for the company. */
+            people: components["schemas"]["JobPerson"][];
+        };
+        JobPerson: {
+            name: string;
+            /** @example Hiring manager */
+            role?: string;
+            /**
+             * @description Where the name came from. `posting` means the posting itself named them (YC hiring managers).
+             *     `yc_company_page` means the Y Combinator company page lists them as a founder. `company_site`
+             *     means the company's own team or about page names them.
+             * @example posting
+             * @enum {string}
+             */
+            source: "posting" | "yc_company_page" | "company_site";
+        };
+        /** @description Present only when the platform publishes a salary. A bound of zero or less is treated as not published, and a salary with no bound and no text (or only a zero range such as `$0 - $0`) is omitted. When the text was not parsed into numbers, `text` carries it as written. */
+        JobSalary: {
+            min?: number;
+            max?: number;
+            /** @description The minimum converted to a yearly amount, in `currency`. Hourly and monthly salaries use 2080 hours and 12 months. Absent when unknown. */
+            yearly_min?: number;
+            /** @description The maximum converted to a yearly amount, in `currency`. Absent when unknown. */
+            yearly_max?: number;
+            /** @example EUR */
+            currency?: string;
+            /** @example year */
+            period?: string;
+            /** @description The original salary text, when it was not parsed into numbers. */
+            text?: string;
+        };
+        /**
+         * @description Events an endpoint can subscribe to. `ping` is always delivered and is not listed.
+         * @enum {string}
+         */
+        WebhookEvent: "batch.completed" | "batch.failed" | "monitor.changed" | "monitor.failed";
+        /**
+         * @description Body shape. `json` is the signed JSON document. `slack` posts `{"text": summary}` and `discord` posts
+         *     `{"content": summary}` (at most 2,000 characters) for incoming-webhook URLs. Signature headers are sent in
+         *     every format.
+         * @enum {string}
+         */
+        WebhookFormat: "json" | "slack" | "discord";
+        /** @description A registered webhook endpoint. Never includes the signing secret. */
+        WebhookEndpoint: {
+            /**
+             * @description Endpoint id. Use it in the `webhookID` path parameter and as `webhook_endpoint_id` on a batch.
+             * @example 0190f3a2-7c1e-7d4b-9a2f-3b8e5c6d7e80
+             */
+            id: string;
+            name?: string | null;
+            /**
+             * Format: uri
+             * @description HTTPS URL that receives the deliveries.
+             */
+            url: string;
+            events: components["schemas"]["WebhookEvent"][];
+            format: components["schemas"]["WebhookFormat"];
+            /** @description False once the endpoint was disabled, by a failure streak or by `enabled: false`. */
+            enabled: boolean;
+            /** @description Why the endpoint is disabled, when it is. Null while enabled. */
+            disabled_reason?: string | null;
+            /** @description Failed deliveries in a row. Reset by a success, and by re-enabling. At 100 the endpoint is disabled. */
+            consecutive_failures: number;
+            /** Format: date-time */
+            last_success_at?: string | null;
+            /** Format: date-time */
+            last_failure_at?: string | null;
+            /** @description Starts at 1 and goes up by one on each rotation. Also the `kid` in signature headers. */
+            secret_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Returned by create and rotate-secret. `secret` is shown once. */
+        WebhookEndpointWithSecret: components["schemas"]["WebhookEndpoint"] & {
+            /**
+             * @description The HMAC signing key, as a string of the form `whsec_<random>`. Use the whole string, prefix included,
+             *     as the key bytes. Store it now; it is never returned again.
+             */
+            secret: string;
+        };
+        /** @description Body of POST /v1/webhooks. Unknown fields are a 400. */
+        WebhookEndpointCreate: {
+            /** Format: uri */
+            url: string;
+            name?: string;
+            /** @description Defaults to `["batch.completed", "batch.failed"]`. */
+            events?: components["schemas"]["WebhookEvent"][];
+            format?: components["schemas"]["WebhookFormat"];
+        };
+        /** @description Body of PATCH /v1/webhooks/{webhookID}. Send at least one field. Unknown fields are a 400. */
+        WebhookEndpointUpdate: {
+            /** Format: uri */
+            url?: string;
+            name?: string;
+            events?: components["schemas"]["WebhookEvent"][];
+            format?: components["schemas"]["WebhookFormat"];
+            enabled?: boolean;
+        };
+        WebhookEndpointList: {
+            data: components["schemas"]["WebhookEndpoint"][];
+        };
+        /** @enum {string} */
+        WebhookDeliveryStatus: "pending" | "delivering" | "delivered" | "failed" | "dead";
+        /** @description One event sent to one endpoint. Attempts are not listed separately. */
+        WebhookDelivery: {
+            /** @description Delivery id. Also sent as `X-ILayer-Delivery`. */
+            id: string;
+            /**
+             * @example batch.completed
+             * @example ping
+             */
+            event_type: string;
+            /** @description Id of the object the event is about (the batch job, or the monitor event). */
+            event_id: string;
+            status: components["schemas"]["WebhookDeliveryStatus"];
+            /** @description Attempts made so far. */
+            attempt: number;
+            /** @description The first attempt plus six retries. */
+            max_attempts: number;
+            /** Format: date-time */
+            next_retry_at?: string | null;
+            last_error?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        WebhookDeliveryList: {
+            data: components["schemas"]["WebhookDelivery"][];
+        };
+        WebhookTestResponse: {
+            delivery_id: string;
+        };
+        /**
+         * @description What one check found. `unchanged` and `changed` are a fetched page. `not_modified` means the target
+         *     answered `304 Not Modified` to a conditional request, so nothing was re-read. `failed` means the page could
+         *     not be checked; it counts toward the auto-disable limit.
+         * @enum {string}
+         */
+        MonitorCheckOutcome: "unchanged" | "changed" | "not_modified" | "failed";
+        /** @description A change monitor for one page (`scope: page`) or a whole site (`scope: site`). Never includes the content it last captured. */
+        Monitor: {
+            /** @example 0190f5c4-2b7a-7e10-8d3f-6a1c9e4b2d70 */
+            id: string;
+            /** @description Defaults to the host of `url`. */
+            name: string;
+            /** Format: uri */
+            url: string;
+            /** @description CSS selector. Every element it matches is watched, as its text, in document order. Null watches the main content of the page. */
+            selector: string | null;
+            /** @description Render the page in a browser before reading it. Costs more credits; see the Monitors section of the API reference. */
+            js_render: boolean;
+            /** @description The interval you asked for. Defaults to the plan minimum. */
+            interval_seconds: number;
+            /** @description The interval in force now. It moves between the plan minimum and `interval_seconds` as the page changes or stays put. */
+            current_interval_seconds: number;
+            /** @description A change must be seen on this many checks in a row before it is reported. 1 reports the first change. */
+            confirm_checks: number;
+            /** @description The endpoint that receives `monitor.changed` and `monitor.failed`. Null when none is set. */
+            webhook_endpoint_id: string | null;
+            /** @description False once the monitor was disabled, by repeated failures, by running out of credits, or by `enabled: false`. */
+            enabled: boolean;
+            /** @description Why the monitor is disabled, when it is. Null while enabled. */
+            disabled_reason: string | null;
+            /** @description A short description of the most recent failed check. Cleared by a successful check and by re-enabling. */
+            last_error: string | null;
+            /** Format: date-time */
+            last_checked_at: string | null;
+            /** Format: date-time */
+            last_changed_at: string | null;
+            /** Format: date-time */
+            next_check_at: string | null;
+            /** @description Failed checks in a row. A success resets it. The monitor disables itself when it reaches the limit. */
+            consecutive_failures: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * @description `page` watches one URL. `site` watches every page the start URL leads to on its exact host. Set at create; it cannot be changed.
+             * @enum {string}
+             */
+            scope: "page" | "site";
+            /** @description Site monitors only. The most pages a run considers. Null for page monitors. */
+            max_pages: number | null;
+            /** @description Site monitors only. Path patterns a page must match to be kept. Empty keeps every path. */
+            include_paths: string[];
+            /** @description Site monitors only. Path patterns that drop a page. Applied after `include_paths`. */
+            exclude_paths: string[];
+            /** @description Site monitors only. A run stops fetching when the next fetch would exceed this many credits. Null for no cap. */
+            max_credits_per_run: number | null;
+            /** @description Site monitors only. Pages the monitor currently tracks, not counting removed ones. Null for page monitors. */
+            pages_tracked: number | null;
+            /** @description Site monitors only. Counts of the most recent run. Null until a run has finished, and for page monitors. */
+            last_run: components["schemas"]["MonitorRunSummary"] | null;
+        };
+        /** @description Body of POST /v1/monitors. Unknown fields are a 400. */
+        MonitorCreate: {
+            /** Format: uri */
+            url: string;
+            name?: string;
+            /** @description CSS selector. Omit to watch the main content. */
+            selector?: string;
+            /** @description Between the plan minimum and 2,592,000 (30 days). Defaults to the plan minimum. */
+            interval_seconds?: number;
+            webhook_endpoint_id?: string;
+            /** @default 1 */
+            confirm_checks?: number;
+            /** @default false */
+            js_render?: boolean;
+            /**
+             * @description `site` watches every page reachable from `url` on its exact host. Requires `max_pages`.
+             * @default page
+             * @enum {string}
+             */
+            scope?: "page" | "site";
+            /** @description Site only, and required for it. The most pages a run considers. Capped by your plan (free 25, starter 250, pro and other paid plans 2,000, enterprise and internal 10,000). */
+            max_pages?: number;
+            /** @description Site only. Path patterns a page must match to be kept. See the Monitors section of the API reference. */
+            include_paths?: string[];
+            /** @description Site only. Path patterns that drop a page. */
+            exclude_paths?: string[];
+            /** @description Site only. Optional cap on the credits one run may spend. */
+            max_credits_per_run?: number;
+        };
+        /** @description Body of PATCH /v1/monitors/{monitorID}. Send at least one field. Unknown fields are a 400. `scope` cannot be changed, so sending it is a 400. */
+        MonitorUpdate: {
+            name?: string;
+            selector?: string | null;
+            interval_seconds?: number;
+            /** @description Null clears the endpoint. */
+            webhook_endpoint_id?: string | null;
+            confirm_checks?: number;
+            js_render?: boolean;
+            /** @description True re-enables the monitor: it clears `disabled_reason` and `last_error`, resets `consecutive_failures` to 0, and sets `next_check_at` to now. */
+            enabled?: boolean;
+            /** @description Site monitors only. Same rule as on create, capped by the plan. */
+            max_pages?: number;
+            /** @description Site monitors only. Replaces the whole list. */
+            include_paths?: string[];
+            /** @description Site monitors only. Replaces the whole list. */
+            exclude_paths?: string[];
+            /** @description Site monitors only. Null removes the cap. */
+            max_credits_per_run?: number | null;
+        };
+        MonitorList: {
+            data: components["schemas"]["Monitor"][];
+        };
+        /** @description Result of POST /v1/monitors/{monitorID}/check. */
+        MonitorCheckResult: {
+            outcome: components["schemas"]["MonitorCheckOutcome"];
+            /** @description The change event, present only when `outcome` is `changed`. */
+            event_id?: string;
+            /** @description Credits this check cost. The same as the scrape that did the fetch. For a site monitor, the credits the whole run spent. */
+            credits: number;
+            run?: components["schemas"]["MonitorRunSummary"];
+        };
+        /** @description Counts of one site run. Also the `last_run` of a site monitor, and `run` in a site check result. */
+        MonitorRunSummary: {
+            /** @description Pages fetched this run. */
+            checked: number;
+            /** @description Pages left out without a fetch, because their sitemap `lastmod` had not changed. They cost nothing. */
+            skipped: number;
+            changed: number;
+            /** @description Pages seen for the first time, or seen again after being removed. */
+            added: number;
+            /** @description Pages no longer found, or that answered 404 or 410. */
+            removed: number;
+            credits: number;
+            /** @description True when `max_credits_per_run` stopped the run before every page was fetched. */
+            truncated: boolean;
+        };
+        /** @description The digest of a site run that found a change. The `summary` of a site change, and the same lists the `monitor.changed` site event carries. */
+        MonitorSiteDigest: {
+            counts: components["schemas"]["MonitorRunSummary"];
+            truncated: boolean;
+            /** @description Pages whose content changed. Each diff is at most 2,000 characters. */
+            changed: {
+                url: string;
+                diff: string;
+            }[];
+            added: string[];
+            removed: string[];
+        };
+        /** @description One page a site monitor tracks. */
+        MonitorPage: {
+            /** Format: uri */
+            url: string;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: date-time */
+            last_changed_at: string | null;
+            /**
+             * Format: date-time
+             * @description Set while the page is removed. Removed pages stay in the list.
+             */
+            removed_at: string | null;
+        };
+        MonitorPageList: {
+            data: components["schemas"]["MonitorPage"][];
+            /** @description Pass as `cursor` for the next page. Null on the last page. */
+            next_cursor: string | null;
+        };
+        /** @description One confirmed change to a monitor. The customer-visible history of the monitor. A site monitor records one change per run that found something, with `summary` set and `diff` null. */
+        MonitorChange: {
+            id: string;
+            /** Format: date-time */
+            detected_at: string;
+            /** @description SHA-256 of the watched content before the change. */
+            previous_hash: string | null;
+            /** @description SHA-256 of the watched content after the change. */
+            new_hash: string;
+            /** @description Unified line diff from the previous content to the new one. Truncated at 65,536 characters. Null for a site change, see `summary`. */
+            diff: string | null;
+            /** @description Site changes only. The run's digest. */
+            summary?: components["schemas"]["MonitorSiteDigest"] | null;
+            /**
+             * Format: date-time
+             * @description When the `monitor.changed` delivery was queued. Null when the monitor had no enabled endpoint subscribed to it.
+             */
+            notified_at: string | null;
+        };
+        MonitorChangeList: {
+            /** @description Newest first. */
+            data: components["schemas"]["MonitorChange"][];
+        };
+        /** @description The `data` of a `monitor.changed` delivery, sent inside the usual `{id, type, created, data}` envelope. A page monitor sends the page variant. A site monitor sends one site variant per run that found a change, never one per page. */
+        MonitorChangedEvent: components["schemas"]["MonitorChangedPageEvent"] | components["schemas"]["MonitorChangedSiteEvent"];
+        /** @description The `data` of a site `monitor.changed` delivery. One digest per run that found a change. */
+        MonitorChangedSiteEvent: {
+            monitor_id: string;
+            name: string;
+            /** @description The start URL of the site monitor. */
+            url: string;
+            /** @enum {string} */
+            scope: "site";
+            /** Format: date-time */
+            detected_at: string;
+            counts: components["schemas"]["MonitorRunSummary"];
+            /** @description True when `max_credits_per_run` stopped the run early. */
+            truncated: boolean;
+            changed: {
+                url: string;
+                diff: string;
+            }[];
+            added: string[];
+            removed: string[];
+            /** @example /v1/monitors/0190f5c4-2b7a-7e10-8d3f-6a1c9e4b2d70/changes */
+            changes_url: string;
+        };
+        /** @description The `data` of a page `monitor.changed` delivery. */
+        MonitorChangedPageEvent: {
+            monitor_id: string;
+            name: string;
+            url: string;
+            /** Format: date-time */
+            detected_at: string;
+            previous_hash: string | null;
+            new_hash: string;
+            /** @description The first 4,000 characters of the change's diff. The full diff is in `changes_url`. */
+            diff: string;
+            /** @example /v1/monitors/0190f5c4-2b7a-7e10-8d3f-6a1c9e4b2d70/changes */
+            changes_url: string;
+        };
+        /** @description The `data` of a `monitor.failed` delivery. Sent when a monitor is disabled after repeated failed checks. */
+        MonitorFailedEvent: {
+            monitor_id: string;
+            name: string;
+            url: string;
+            /** @description Why the monitor was disabled, the last check error. */
+            reason: string;
+            /** Format: date-time */
+            failed_at: string;
+        };
     };
     responses: {
+        /** @description Who drives the session, sent with Cache-Control no-store. */
+        BrowserControl: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    session_id: string;
+                    /** @example running */
+                    status: string;
+                    /**
+                     * @description `agent` (your CDP connection drives) or `human` (a person in the live view drives).
+                     * @example agent
+                     */
+                    controller: string;
+                    /**
+                     * Format: date-time
+                     * @description When the session ends at the latest (its `session_ttl`).
+                     */
+                    expires_at: string;
+                };
+            };
+        };
         /** @description The request is invalid. Not retryable; fix the request using `code` and `diagnostics.hint`. */
         BadRequest: {
             headers: {
@@ -3305,7 +4728,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description `ERR::LIMIT::QUOTA_EXCEEDED`: the organization is out of credits. Not retryable until credits are added. */
+        /** @description `ERR::LIMIT::QUOTA_EXCEEDED`: the organization is out of credits. Not retryable until credits are added. For a partner workspace the message says its free credits are used, with the date they return; once the partner's balance or the workspace's own balance has been funded and is exhausted, it says the provider's balance is exhausted and the partner must add balance. For an ordinary organization the `detail` ends with: To get higher limits, contact our team from the dashboard or at support@spicrawl.com about upgrading your plan. */
         PaymentRequired: {
             headers: {
                 "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -3367,7 +4790,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Rate, concurrency or live-session limit reached. Retryable after `Retry-After`. */
+        /** @description Rate, concurrency or live-session limit reached. Retryable after `Retry-After`. For an ordinary organization the rate and concurrency `detail` ends with the sentence "To get higher limits, contact our team from the dashboard or at support@spicrawl.com about upgrading your plan." */
         RateLimited: {
             headers: {
                 "Retry-After": components["headers"]["Retry-After"];
@@ -3448,6 +4871,12 @@ export interface components {
         "X-RateLimit-Remaining": number;
         /** @description Seconds until the bucket has one request available again. Only sent when the limiter imposed a wait. */
         "X-RateLimit-Reset": number;
+        /** @description Searches a workspace may run per day on `POST /v1/jobs/search`. */
+        "X-Jobs-Daily-Limit": number;
+        /** @description Searches left for the workspace today after this request. Absent when the count could not be read. */
+        "X-Jobs-Daily-Remaining": number;
+        /** @description Unix seconds of the next 12:00 AM IST (18:30 UTC), when the daily count resets. */
+        "X-Jobs-Daily-Reset": number;
     };
     pathItems: never;
 }
@@ -3464,6 +4893,8 @@ export interface operations {
                 js_render?: boolean;
                 /** @description Coming soon. Render with full-browser rendering hardened against bot detection, flat 25 credits at any proxy tier; wins over js_render when both are set. Cannot be combined with mode=auto; returns 503 ERR::ENGINE::UNAVAILABLE where it is not available. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?stealth` means true. */
                 stealth?: boolean;
+                /** @description Solve the captcha widgets embedded in the page (Cloudflare Turnstile, reCAPTCHA v2, hCaptcha) before `actions` run. Selects full-browser rendering, as `stealth` does. Cannot be combined with mode=auto, which returns 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Not available on batch jobs. A successful solve adds 5 credits. Accepts true/false/1/0; a bare `?solve_captcha` means true. */
+                solve_captcha?: boolean;
                 /** @description Fetch tier only. Present a current browser TLS/HTTP2 fingerprint, with matching browser headers and Accept-Encoding, to pass passive fingerprint checks. On by default, free, no JavaScript; `impersonate=false` turns it off and the fetch uses a non-browser TLS handshake. Ignored on rendered requests. If omitted, the project's stored default applies, and true when the project sets none. Accepts true/false/1/0; a bare `?impersonate` means true. */
                 impersonate?: boolean;
                 /** @description `auto` escalates through the rendering tiers (plain fetch, then JavaScript rendering) until one returns a usable page, billing only the rung that succeeded (0 if all fail) while reserving the dearest rung against quota. Incompatible with js_render and stealth. If omitted, the project's stored default applies. */
@@ -3493,6 +4924,8 @@ export interface operations {
                 wait_for_timeout?: number;
                 /** @description URL-encoded JSON array. Ordered browser workflow (click, fill, scroll, ...), validated before anything is spent. Browser-only and makes the request uncacheable. A failed step ends the request at 0 credits unless that step has on_error=skip. */
                 actions?: string;
+                /** @description Integer 0-20, default 0 (off). Scroll to the bottom up to this many times before capture, stopping early once the page stops growing. For infinite-scroll pages (feeds, search results, social timelines) where only the first screen is in the page until scrolled. Shorthand for a trailing {"scroll": {"to_bottom": true, "max_iterations": N}} step after actions. Routes like actions: full-browser rendering. With neither js_render nor mode=auto it is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Out of range is 400 ERR::REQUEST::INVALID_PARAMETER. Refused on /v1/batch with 400 INVALID_PARAMETER. If scrolling stops early, the page is returned with the warning scroll_pages: scrolling stopped early: reason. */
+                scroll_pages?: number;
                 /** @description Comma-separated list (blank items dropped). Subresource classes the browser must not load (plural and short aliases accepted, case-insensitive). If omitted, full-browser rendering blocks nothing, so images and fonts load, including for screenshot, pdf, actions and anti-bot escalation. A list blocks exactly the classes named and `none` (alone) blocks nothing. Any value other than `none` is browser-only. If omitted, the project's stored default applies. */
                 block_resources?: ("none" | "document" | "documents" | "stylesheet" | "stylesheets" | "css" | "image" | "images" | "media" | "font" | "fonts" | "script" | "scripts" | "js" | "xhr" | "fetch" | "websocket" | "websockets" | "other")[];
                 /**
@@ -3524,15 +4957,17 @@ export interface operations {
                 extract_preset?: string;
                 /** @description Coming soon. URL-encoded JSON object. Model-driven extraction into `data`; adds 4 credits. Refused with 503 ERR::INTERNAL::UNAVAILABLE where no model is configured, and a model failure is 502 ERR::EXTRACT::FAILED at 0 credits. Forces the JSON envelope. */
                 ai_extract?: string;
-                /** @description true strips nav/footer/aside to the main article; false keeps the whole document. Omitted keeps the pipeline default (main-content isolation on for markdown). Applies to markdown/text/cleaned output. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?main_content_only` means true. */
+                /** @description true strips nav/footer/aside to the main article; false keeps the whole document. Omitted is on by default for markdown, text and json, and off for html; pass false to keep the whole page. Applies to markdown/text/cleaned output. A request or project value always wins. Accepts true/false/1/0; a bare `?main_content_only` means true. */
                 main_content_only?: boolean;
+                /** @description Return `sections` (the main-content markdown split at its ATX headings) in the JSON envelope. Applies only to an explicit `response_format=json`; ignored for other formats. Accepts true/false/1/0; a bare `?sections` means true. */
+                sections?: boolean;
                 /** @description Comma-separated list (blank items dropped). CSS selectors; keep only matching subtrees before extraction and markdown conversion. Applied before exclude_tags and main_content_only. */
                 include_tags?: string[];
                 /** @description Comma-separated list (blank items dropped). CSS selectors; remove matching elements, applied after include_tags and before main_content_only. */
                 exclude_tags?: string[];
                 /** @description When the target returns a PDF and markdown/text is requested, parse it to text. false refuses it with 502 ERR::EXTRACT::FAILED (0 credits); response_format=html always returns the raw bytes. If omitted, the project's stored default applies. Accepts true/false/1/0; a bare `?parse_pdf` means true. */
                 parse_pdf?: boolean;
-                /** @description Body shape: html/markdown/text return the document itself, json the envelope, pdf a PDF printed by a real browser (needs full-browser rendering). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies. */
+                /** @description Body shape: html/markdown/text return the document itself, json the envelope (BREAKING CHANGE: an explicit json request now gets the main-content markdown as `content` and heading-split `sections`, not the raw HTML), pdf a PDF printed by a real browser (needs full-browser rendering). extract, autoparse, links, ai_extract, network_capture or screenshot override this to the JSON envelope with X-Warning FORMAT_COERCED. A non-HTML target (image, binary) requested as markdown/text fails 502 ERR::EXTRACT::FAILED at 0 credits. If omitted, the project's stored default applies. */
                 response_format?: "html" | "markdown" | "text" | "json" | "pdf";
                 /** @description Serve a stored result younger than cache_ttl (Cache-State: hit). A hit is billed at the same price as the fetch that stored it: the cache saves the fetch (latency and load on the target), not credits. Only billable successes of GET-method requests without session_id or actions are stored. Set false for time-sensitive data; cache=false with cache_ttl>0 is 400 ERR::REQUEST::INCOMPATIBLE_FLAGS. Accepts true/false/1/0; a bare `?cache` means true. */
                 cache?: boolean;
@@ -3570,7 +5005,7 @@ export interface operations {
                     "X-Credits-Charged"?: number;
                     /** @description Price of the rendering/proxy tier that ran (on a cache hit, the tier that fetched the stored copy). Differs from X-Credits-Charged exactly when nothing was billed. */
                     "X-Request-Cost"?: number;
-                    /** @description Whole credits (rounded down) left in the organization's monthly allowance after this request's charge. Read from the enforced counter, so it also counts credits held for in-flight work (running batch jobs, open browser sessions). Never negative. Absent when the organization has no ceiling or the counter could not be read. */
+                    /** @description Whole credits (rounded down) left in the organization's monthly allowance after this request's charge. Read from the enforced counter, so it also counts credits held for in-flight work (running batch jobs, open browser sessions). Never negative. Sent only when the request was paid from the organization's free monthly credits or its own balance; not sent for a request paid from a partner wallet. Absent when the organization has no ceiling or the counter could not be read. */
                     "X-Credits-Remaining"?: number;
                     /** @description The rendering tier used, or the last one attempted - `fetch` (HTTP only), `js` (JavaScript rendering) or `browser` (full-browser rendering). After an escalation (mode=auto, or a bot challenge escalated to stronger rendering), the tier that served the page. */
                     "X-Engine"?: "fetch" | "js" | "browser";
@@ -3596,6 +5031,8 @@ export interface operations {
                     "Cache-State"?: "hit" | "miss" | "bypass";
                     /** @description Repeated, one per advisory, formatted `CODE: message`. Codes: PROXY_FLAG_IGNORED, FORMAT_COERCED, CACHE_TTL_CLAMPED, ENGINE_SUBSTITUTED (`served by JavaScript rendering` or `browser rendering`), ENGINE_IGNORED, RENDER_DEGRADED, EMPTY_RENDER (the render found no visible content and nothing was charged), ESCALATED (one per abandoned tier, naming the tier, its price and why: `ESCALATED: JavaScript rendering (3 credits): blocked by challenge page (Cloudflare …)`). */
                     "X-Warning"?: string;
+                    /** @description Repeated, one per note: advice for the caller, not a problem. Message only. Also in the envelope's `notes` array. Currently sent to suggest `js_render` for a plain fetch of a page that loads scripts, and `premium_proxy`, `proxy` or `stealth` when the site refuses with 403, 429 or 503 (not sent for a status listed in `allowed_status_codes`). On a failed scrape, the same text as `diagnostics.hint`. */
+                    "X-Note"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3642,7 +5079,7 @@ export interface operations {
                     "X-Credits-Charged"?: number;
                     /** @description Price of the rendering/proxy tier that ran (on a cache hit, the tier that fetched the stored copy). Differs from X-Credits-Charged exactly when nothing was billed. */
                     "X-Request-Cost"?: number;
-                    /** @description Whole credits (rounded down) left in the organization's monthly allowance after this request's charge. Read from the enforced counter, so it also counts credits held for in-flight work (running batch jobs, open browser sessions). Never negative. Absent when the organization has no ceiling or the counter could not be read. */
+                    /** @description Whole credits (rounded down) left in the organization's monthly allowance after this request's charge. Read from the enforced counter, so it also counts credits held for in-flight work (running batch jobs, open browser sessions). Never negative. Sent only when the request was paid from the organization's free monthly credits or its own balance; not sent for a request paid from a partner wallet. Absent when the organization has no ceiling or the counter could not be read. */
                     "X-Credits-Remaining"?: number;
                     /** @description The rendering tier used, or the last one attempted - `fetch` (HTTP only), `js` (JavaScript rendering) or `browser` (full-browser rendering). After an escalation (mode=auto, or a bot challenge escalated to stronger rendering), the tier that served the page. */
                     "X-Engine"?: "fetch" | "js" | "browser";
@@ -3668,6 +5105,8 @@ export interface operations {
                     "Cache-State"?: "hit" | "miss" | "bypass";
                     /** @description Repeated, one per advisory, formatted `CODE: message`. Codes: PROXY_FLAG_IGNORED, FORMAT_COERCED, CACHE_TTL_CLAMPED, ENGINE_SUBSTITUTED (`served by JavaScript rendering` or `browser rendering`), ENGINE_IGNORED, RENDER_DEGRADED, EMPTY_RENDER (the render found no visible content and nothing was charged), ESCALATED (one per abandoned tier, naming the tier, its price and why: `ESCALATED: JavaScript rendering (3 credits): blocked by challenge page (Cloudflare …)`). */
                     "X-Warning"?: string;
+                    /** @description Repeated, one per note: advice for the caller, not a problem. Message only. Also in the envelope's `notes` array. Currently sent to suggest `js_render` for a plain fetch of a page that loads scripts, and `premium_proxy`, `proxy` or `stealth` when the site refuses with 403, 429 or 503 (not sent for a status listed in `allowed_status_codes`). On a failed scrape, the same text as `diagnostics.hint`. */
+                    "X-Note"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3684,6 +5123,49 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             410: components["responses"]["Gone"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["ServerError"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+            504: components["responses"]["GatewayTimeout"];
+        };
+    };
+    brandPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandRequest"];
+            };
+        };
+        responses: {
+            /**
+             * @description The brand assets. Only the sections named in `include` appear (all of them by default). `credits`
+             *     and `engine` are copied from the render, and the `X-Credits-Charged`, `X-Credits-Remaining`,
+             *     `X-Request-Id`, `X-Engine` and `X-Warning` headers are set as they are on `/v1/scrape`.
+             */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    "X-RateLimit-Limit": components["headers"]["X-RateLimit-Limit"];
+                    "X-RateLimit-Remaining": components["headers"]["X-RateLimit-Remaining"];
+                    "X-RateLimit-Reset": components["headers"]["X-RateLimit-Reset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            402: components["responses"]["PaymentRequired"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             413: components["responses"]["PayloadTooLarge"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["ServerError"];
@@ -4018,6 +5500,489 @@ export interface operations {
             500: components["responses"]["ServerError"];
         };
     };
+    webhooksList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's endpoints. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpointList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    webhooksCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEndpointCreate"];
+            };
+        };
+        responses: {
+            /** @description The endpoint and its signing secret. This is the only response that carries `secret`. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpointWithSecret"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description The organization already has 20 endpoints. Delete one before you add another. */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            500: components["responses"]["ServerError"];
+        };
+    };
+    webhooksGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id` returned by `POST /v1/webhooks`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The endpoint. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpoint"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    webhooksDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id` returned by `POST /v1/webhooks`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. No body. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    webhooksUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id` returned by `POST /v1/webhooks`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEndpointUpdate"];
+            };
+        };
+        responses: {
+            /** @description The endpoint after the change. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpoint"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    webhooksTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ping is queued. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookTestResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    webhooksRotateSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint `id`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The endpoint with `secret_version` bumped, and the new `secret`. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpointWithSecret"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    webhooksDeliveriesList: {
+        parameters: {
+            query?: {
+                /** @description Deliveries to return. Defaults to 20; out of range (1 to 100) is a 400, not clamped. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The endpoint `id`. An id of another organization answers 404. */
+                webhookID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent deliveries, newest first. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDeliveryList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's monitors. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitorCreate"];
+            };
+        };
+        responses: {
+            /** @description The monitor. It is checked for the first time when `next_check_at` comes around. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Monitor"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description `webhook_endpoint_id` names no endpoint of this organization. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id` returned by `POST /v1/monitors`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The monitor. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Monitor"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id` returned by `POST /v1/monitors`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. No body. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id` returned by `POST /v1/monitors`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitorUpdate"];
+            };
+        };
+        responses: {
+            /** @description The monitor after the change. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Monitor"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor `id`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result of the check. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorCheckResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsChanges: {
+        parameters: {
+            query?: {
+                /** @description Changes to return. Defaults to 20; out of range (1 to 100) is a 400, not clamped. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The monitor `id`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent changes, newest first. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorChangeList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    monitorsPages: {
+        parameters: {
+            query?: {
+                /** @description Pages to return, 1 to 500. Defaults to 100; out of range is a 400, not clamped. */
+                limit?: number;
+                /** @description The `next_cursor` of the previous page. Opaque. Omit it for the first page. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The monitor `id`. An id of another organization answers 404. */
+                monitorID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of tracked URLs. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorPageList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["ServerError"];
+        };
+    };
     sessionsList: {
         parameters: {
             query?: {
@@ -4319,6 +6284,11 @@ export interface operations {
                         /** @example 60 */
                         expires_in: number;
                         single_use: boolean;
+                        /**
+                         * @description Names the session this token opens, once connected. Pass it to the `/v1/browser/sessions/{id}` routes for a live view and to hand control to a person.
+                         * @example bs4f0c2a9e1d7b38c65a0e9f12
+                         */
+                        session_id?: string;
                     };
                 };
             };
@@ -4326,6 +6296,99 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    browserSessionGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["BrowserControl"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    browserLiveView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The live view links, sent with Cache-Control no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session_id: string;
+                        /**
+                         * @description The viewer page. The WebSocket URL rides in its fragment, which a browser never sends to a server.
+                         * @example https://api.spicrawl.com/v1/browser/live#wss%3A%2F%2Fapi.spicrawl.com%2Fv1%2Fbrowser%2Fsessions%2Fbs4f0c2a9e1d7b38c65a0e9f12%2Flive%3Ftoken%3Dwbv_...
+                         */
+                        live_view_url: string;
+                        /** @example wss://api.spicrawl.com/v1/browser/sessions/bs4f0c2a9e1d7b38c65a0e9f12/live?token=wbv_... */
+                        live_url: string;
+                        /** @example 60 */
+                        expires_in: number;
+                        single_use: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    browserTakeover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["BrowserControl"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    browserRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The `session_id` that `POST /v1/browser/token` returned for this connection. An unknown, closed or other organization's session answers 404 `ERR::REQUEST::NOT_FOUND`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["BrowserControl"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     requestsList: {
@@ -4479,6 +6542,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageReconciliation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    usageCredits: {
+        parameters: {
+            query?: {
+                /** @description Entries per page, 1 to 100. */
+                limit?: number;
+                /** @description The `next_cursor` of the previous page. Omit for the newest entries. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of credit history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditsResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -4663,7 +6755,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The wallet. */
+            /** @description The balance. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4672,13 +6764,19 @@ export interface operations {
                     "application/json": {
                         /** Format: int64 */
                         funded_micro: number;
-                        /** Format: int64 */
+                        /**
+                         * Format: int64
+                         * @description Always 0.
+                         */
                         credit_line_micro: number;
                         /** Format: int64 */
                         spent_micro: number;
                         /** Format: int64 */
                         balance_micro: number;
-                        /** Format: int64 */
+                        /**
+                         * Format: int64
+                         * @description The same as balance_micro. Kept for existing clients.
+                         */
                         available_micro: number;
                         /** Format: int64 */
                         funded_credits?: number;
@@ -4690,9 +6788,48 @@ export interface operations {
                         balance_credits?: number;
                         /** Format: int64 */
                         available_credits?: number;
+                        /**
+                         * Format: date-time
+                         * @description When the monthly window ends and the account's credits reset (UTC).
+                         */
+                        resets_at: string;
+                        /** @description True for a partner with no monthly ceiling. The figures read 0. */
+                        unlimited: boolean;
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    partnerSettingsPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    allow_account_spend: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The setting as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        allow_account_spend: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             500: components["responses"]["ServerError"];
@@ -4705,9 +6842,12 @@ export interface operations {
                 limit?: number;
                 /** @description The `next_after` of the previous page. Only with `sort=external_user_id`. */
                 after?: string;
-                /** @description Case-sensitive prefix of `external_user_id`. Matches all when absent. */
+                /**
+                 * @description A prefix of `external_user_id` (case-sensitive) or of `display_name` (case-insensitive). Matches all when
+                 *     absent. Up to 100 characters, no control characters.
+                 */
                 q?: string;
-                /** @description `external_user_id` (default) or `wallet_used` (descending by this window's wallet-paid spend). */
+                /** @description `external_user_id` (default) or `wallet_used` (descending by this window's balance spend). */
                 sort?: "external_user_id" | "wallet_used";
                 /** @description Rows to skip. Only with `sort=wallet_used`; `next_offset` of the previous page. */
                 offset?: number;
@@ -4776,8 +6916,11 @@ export interface operations {
                 "application/json": {
                     /** @description The tier's id or name. */
                     tier?: string;
-                    /** @description Names a new workspace. An existing workspace keeps its name: change it with PATCH. */
-                    display_name?: string | null;
+                    /**
+                     * @description Applied only when this call creates the workspace. Spaces at the ends are trimmed; a blank name is
+                     *     no name. Control characters are refused.
+                     */
+                    display_name?: string;
                 };
             };
         };
@@ -4820,7 +6963,7 @@ export interface operations {
             500: components["responses"]["ServerError"];
         };
     };
-    partnerWorkspaceUpdate: {
+    partnerWorkspaceSetDisplayName: {
         parameters: {
             query?: never;
             header?: never;
@@ -4832,17 +6975,19 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PartnerWorkspaceUpdate"];
+                "application/json": {
+                    display_name: string | null;
+                };
             };
         };
         responses: {
-            /** @description The workspace, with its new name. */
+            /** @description The workspace. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PartnerWorkspace"];
+                    "application/json": components["schemas"]["PartnerWorkspaceDetail"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -4906,6 +7051,63 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["ServerError"];
+        };
+    };
+    jobsSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description One page of postings, newest first. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    "X-Jobs-Daily-Limit": components["headers"]["X-Jobs-Daily-Limit"];
+                    "X-Jobs-Daily-Remaining": components["headers"]["X-Jobs-Daily-Remaining"];
+                    "X-Jobs-Daily-Reset": components["headers"]["X-Jobs-Daily-Reset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSearchResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            402: components["responses"]["PaymentRequired"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            /**
+             * @description Either the per-key rate limit was reached (`ERR::LIMIT::RATE_LIMITED`, retryable after `Retry-After`),
+             *     or the workspace's daily allowance is used up (`ERR::LIMIT::DAILY_LIMIT_EXCEEDED`, not retryable
+             *     before the reset that `Retry-After` gives). Neither is charged. For an ordinary organization the
+             *     `detail` of either ends with: To get higher limits, contact our team from the dashboard or at support@spicrawl.com about upgrading your plan.
+             */
+            429: {
+                headers: {
+                    "Retry-After": components["headers"]["Retry-After"];
+                    "X-RateLimit-Limit": components["headers"]["X-RateLimit-Limit"];
+                    "X-RateLimit-Remaining": components["headers"]["X-RateLimit-Remaining"];
+                    "X-RateLimit-Reset": components["headers"]["X-RateLimit-Reset"];
+                    "X-Jobs-Daily-Limit": components["headers"]["X-Jobs-Daily-Limit"];
+                    "X-Jobs-Daily-Remaining": components["headers"]["X-Jobs-Daily-Remaining"];
+                    "X-Jobs-Daily-Reset": components["headers"]["X-Jobs-Daily-Reset"];
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     partnerTiersList: {
