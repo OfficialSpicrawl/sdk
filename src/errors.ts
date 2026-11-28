@@ -11,6 +11,8 @@ export class SpicrawlError extends Error {
   /** The server's own verdict on whether the same request can succeed on retry. */
   readonly retryable: boolean;
   readonly docUrl?: string;
+  /** Where to send feedback about this failure. Present only on reportable failures. */
+  readonly feedbackUrl?: string;
   readonly requestId?: string;
   /** From `Retry-After` or `retry_after_seconds`. */
   readonly retryAfterSeconds?: number;
@@ -45,6 +47,7 @@ export class SpicrawlError extends Error {
     this.detail = p.detail;
     this.retryable = typeof p.retryable === "boolean" ? p.retryable : (init.retryable ?? false);
     this.docUrl = p.doc_url;
+    this.feedbackUrl = typeof p.feedback_url === "string" ? p.feedback_url : undefined;
     this.requestId = p.request_id ?? init.headers?.get("x-request-id") ?? undefined;
     this.retryAfterSeconds = init.retryAfterSeconds ?? p.retry_after_seconds;
     this.diagnostics = p.diagnostics;
@@ -52,6 +55,11 @@ export class SpicrawlError extends Error {
     this.warnings = p.warnings;
     this.problem = init.problem;
     this.headers = init.headers;
+  }
+
+  /** True when the failure can be reported with `client.feedback()` (it carries a `feedbackUrl`). */
+  get isReportable(): boolean {
+    return this.feedbackUrl !== undefined;
   }
 }
 

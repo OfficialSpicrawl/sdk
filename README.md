@@ -369,6 +369,28 @@ try {
 }
 ```
 
+## Report a failed request
+
+When a request fails for a reason that is ours to fix, the error is reportable: `err.isReportable` is true and `err.feedbackUrl` is set. Send a thumbs-down with `feedback()` and the request's `requestId`:
+
+```ts
+import { Spicrawl, isSpicrawlError } from "@spicrawl/sdk";
+
+const spicrawl = new Spicrawl();
+try {
+  return await spicrawl.scrape({ url: "https://example.com/pricing", js_render: true });
+} catch (err) {
+  if (isSpicrawlError(err) && err.isReportable && err.requestId) {
+    await spicrawl.feedback({ requestId: err.requestId, intent: "read the pricing page for a comparison" });
+  }
+  throw err;
+}
+```
+
+- `rating` defaults to `"down"`. You can also pass `kind` (`broken`, `wrong_result`, `missing`, `confusing`, `other`), `impact` (`blocked`, `worked_around`, `friction`), `intent`, `comment` and `agent`.
+- A thumbs-down on a charged request refunds its credits, up to a daily cap. `refundCapReached` is true once the cap is hit.
+- Sending feedback again for the same request returns `alreadySubmitted: true` and records nothing new.
+
 ## Retries and timeouts
 
 Most calls carry no idempotency key, so a repeated scrape is a second, billed scrape. Only partner credit assignment (`users.giveCredits()`) sends one. The SDK retries accordingly:

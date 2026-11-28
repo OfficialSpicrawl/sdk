@@ -1,4 +1,4 @@
-import { Transport, type ClientOptions, type RequestOptions } from "./core.js";
+import { Transport, withMeta, type ClientOptions, type RequestOptions } from "./core.js";
 import { Batch } from "./resources/batch.js";
 import { Brand } from "./resources/brand.js";
 import { Browser } from "./resources/browser.js";
@@ -9,6 +9,39 @@ import { Sessions } from "./resources/sessions.js";
 import { Usage } from "./resources/usage.js";
 import { Webhooks } from "./resources/webhooks.js";
 import type { KeyInfo, ResponseFormat, ResponseMeta, ScrapeEnvelope, ScrapeRequest, WithMeta } from "./types.js";
+
+/** Params for `feedback()`. `requestId` is the failed request's id: `err.requestId`, or `_meta.requestId`. */
+export interface FeedbackParams {
+  requestId: string;
+  /** Default `"down"`. A thumbs-down on a charged request refunds its credits, up to a daily cap. */
+  rating?: "up" | "down";
+  kind?: "broken" | "wrong_result" | "missing" | "confusing" | "other";
+  impact?: "blocked" | "worked_around" | "friction";
+  /** What you were trying to do. Up to 300 characters. */
+  intent?: string;
+  /** Up to 4000 characters. */
+  comment?: string;
+  /** The agent or client that made the request. Up to 200 characters. */
+  agent?: string;
+}
+
+/** Result of `feedback()`. */
+export interface FeedbackResult {
+  feedbackId: string;
+  /** True when this request already had feedback; nothing new was recorded. */
+  alreadySubmitted: boolean;
+  /** Credits refunded by this call. */
+  creditsRefunded: number;
+  /** True when the daily refund cap has been reached, so no credits were refunded. */
+  refundCapReached: boolean;
+}
+
+interface FeedbackResponse {
+  feedback_id: string;
+  already_submitted: boolean;
+  credits_refunded: number;
+  refund_cap_reached: boolean;
+}
 
 /** Params for `scrape()`: everything except a non-JSON `response_format`. */
 export type ScrapeParams = Omit<ScrapeRequest, "response_format"> & { response_format?: "json" };
@@ -86,6 +119,42 @@ export class Spicrawl {
   /** What the calling key is: its scopes, environment and organization. Any valid key may call it. */
   key(opts?: RequestOptions): Promise<WithMeta<KeyInfo>> {
     return this._transport.json({ method: "GET", path: "/v1/key" }, opts);
+  }
+
+  /**
+   * Report a failed request (`POST /v1/feedback`). Pass the failed request's `requestId`.
+   * Calling it again for the same request returns `alreadySubmitted: true`.
+   *
+   * ```ts
+   * await spicrawl.feedback({ requestId: err.requestId!, kind: "broken", intent: "scrape a price page" });
+   * ```
+   */
+  async feedback(params: FeedbackParams, opts?: RequestOptions): Promise<WithMeta<FeedbackResult>> {
+    const r = await this._transport.json<FeedbackResponse>(
+      {
+        method: "POST",
+        path: "/v1/feedback",
+        body: {
+          request_id: params.requestId,
+          rating: params.rating ?? "down",
+          kind: params.kind,
+          impact: params.impact,
+          intent: params.intent,
+          comment: params.comment,
+          agent: params.agent,
+        },
+      },
+      opts,
+    );
+    return withMeta(
+      {
+        feedbackId: r.feedback_id,
+        alreadySubmitted: r.already_submitted,
+        creditsRefunded: r.credits_refunded,
+        refundCapReached: r.refund_cap_reached,
+      },
+      r._meta,
+    );
   }
 
   /**

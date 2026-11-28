@@ -3,6 +3,14 @@
 All notable changes to `@spicrawl/sdk` are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## 0.2.2 — 2026-11-28
+
+Report failed requests.
+
+- **Feedback** (`client.feedback({ requestId, rating, kind, impact, intent, comment, agent })`): `POST /v1/feedback`. `rating` defaults to `"down"`. It returns `feedbackId`, `alreadySubmitted`, `creditsRefunded` and `refundCapReached`. A thumbs-down on a charged request refunds its credits, up to a daily cap.
+- **Errors:** `SpicrawlError` has `feedbackUrl` and an `isReportable` getter (true when the failure carries a `feedbackUrl`). `requestId` is read from the problem body, then from `X-Request-Id`.
+- The `FeedbackParams` and `FeedbackResult` types are exported.
+
 ## 0.2.1 — 2026-11-25
 
 Brand, webhooks and monitors.
