@@ -1,4 +1,10 @@
-export { Spicrawl, type ScrapeParams, type ScrapeRawResult } from "./client.js";
+export {
+  Spicrawl,
+  type FeedbackParams,
+  type FeedbackResult,
+  type ScrapeParams,
+  type ScrapeRawResult,
+} from "./client.js";
 export {
   USER_AGENT,
   DEFAULT_BASE_URL,

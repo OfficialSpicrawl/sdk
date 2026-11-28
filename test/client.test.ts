@@ -154,6 +154,21 @@ describe("client basics", () => {
     expect((calls[0]!.init.headers as Record<string, string>)["X-Trace"]).toBe("1");
   });
 
+  it("scrape() sends method and body on the wire", async () => {
+    const { client, calls } = mock(() => json(envelope));
+    await client.scrape({ url: "https://example.com", method: "POST", body: { q: 1 } } as never);
+    expect(JSON.parse(calls[0]!.init.body as string)).toMatchObject({ method: "POST", body: { q: 1 } });
+  });
+
+  it("SpicrawlError exposes the problem's fix", async () => {
+    const fix = { method: "POST", body: "a=1" };
+    const { client } = mock(() => problem(400, "ERR::REQUEST::BODY_NEEDS_METHOD", { fix }));
+    const err = await client.scrape({ url: "https://example.com", body: "a=1" } as never).catch((e) => e);
+    expect(err.fix).toEqual(fix);
+    const { client: c2 } = mock(() => problem(400, "ERR::REQUEST::INVALID"));
+    expect((await c2.scrape({ url: "x" }).catch((e) => e)).fix).toBeUndefined();
+  });
+
   it("scrape() refuses non-json formats", async () => {
     const { client } = mock(() => json(envelope));
     await expect(client.scrape({ url: "x", response_format: "markdown" } as never)).rejects.toThrow(/scrapeRaw/);

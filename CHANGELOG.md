@@ -3,6 +3,16 @@
 All notable changes to `@spicrawl/sdk` are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## 0.2.2 — 2026-11-28
+
+Report failed requests.
+
+- **Feedback** (`client.feedback({ requestId, rating, kind, impact, intent, comment, agent })`): `POST /v1/feedback`. `rating` defaults to `"down"`. It returns `feedbackId`, `alreadySubmitted`, `creditsRefunded` and `refundCapReached`. A thumbs-down on a charged request refunds its credits, up to a daily cap.
+- **Errors:** `SpicrawlError` has `feedbackUrl` and an `isReportable` getter (true when the failure carries a `feedbackUrl`). `requestId` is read from the problem body, then from `X-Request-Id`.
+- The `FeedbackParams` and `FeedbackResult` types are exported.
+- **Request bodies:** `scrape({ method: "POST", body, custom_headers })` sends a body to the target. `body` is a JSON object or array (sent as JSON) or a string (sent as-is, with `Content-Type` set in `custom_headers`). It needs a `method` of `POST`, `PUT`, `PATCH` or `DELETE` and plain fetch (no `js_render`, `stealth` or other browser options). The workspace must have it enabled; it is not accepted on batch items. See https://docs.spicrawl.com/guides/post-requests.
+- **Errors:** `SpicrawlError` has `fix`, the corrected request the platform builds for some failures (for example `method` added for a body). It is undefined when the platform sends none. The new codes (`ERR::AUTH::BODY_NOT_ENABLED`, `ERR::AUTH::BODY_PAUSED`, `ERR::REQUEST::BODY_*`, `ERR::LIMIT::BODY_RATE_LIMITED`) are in `ERROR_CODES`.
+
 ## 0.2.1 — 2026-11-25
 
 Brand, webhooks and monitors.

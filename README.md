@@ -98,6 +98,22 @@ const r = await spicrawl.scrapeRaw({ url: "https://example.com", response_format
 if (r.format === "text") console.log(r.body);
 ```
 
+### Send a request body (POST)
+
+Set `method` to `POST`, `PUT`, `PATCH` or `DELETE` and pass a `body`. A JSON object or array is sent as JSON. Plain fetch only: a body is refused with `js_render`, `stealth`, `session_id` and other browser options. The workspace must have request bodies enabled.
+
+```ts
+const result = await spicrawl.scrape({
+  url: "https://api.example.com/v1/search",
+  method: "POST",
+  body: { query: "running shoes", limit: 10 },
+  custom_headers: { Authorization: "Bearer <token>" },
+});
+console.log(result.status, result.content.slice(0, 200));
+```
+
+See https://docs.spicrawl.com/guides/post-requests.
+
 ## Extract structured data from a web page
 
 Map field names to CSS selectors, or send a JSON Schema whose properties carry a `selector` to get typed, validated values:
@@ -354,7 +370,7 @@ Every error the SDK throws is a `SpicrawlError`. HTTP errors map to subclasses b
 | `APIConnectionError` | none (`status` 0) | DNS failure, refused or reset connection |
 | `APITimeoutError` | none (`status` 0) | `timeoutMs` exceeded; subclass of `APIConnectionError` |
 
-Each error carries `status`, `code` (a stable `ERR::FAMILY::NAME`), `retryable` (the server's verdict), `retryAfterSeconds`, `requestId`, `diagnostics.hint` and the raw `problem` body. `ERROR_CODES` lists all 49 documented codes.
+Each error carries `status`, `code` (a stable `ERR::FAMILY::NAME`), `retryable` (the server's verdict), `retryAfterSeconds`, `requestId`, `diagnostics.hint`, the raw `problem` body and `fix`: when the platform can build one, the corrected request (for example `method` added for a body). Review `fix` before you resend it; the SDK never resends it for you. `ERROR_CODES` lists all 57 documented codes.
 
 ```ts
 import { Spicrawl, RateLimitError, isSpicrawlError } from "@spicrawl/sdk";
@@ -368,6 +384,28 @@ try {
   else throw err;
 }
 ```
+
+## Report a failed request
+
+When a request fails for a reason that is ours to fix, the error is reportable: `err.isReportable` is true and `err.feedbackUrl` is set. Send a thumbs-down with `feedback()` and the request's `requestId`:
+
+```ts
+import { Spicrawl, isSpicrawlError } from "@spicrawl/sdk";
+
+const spicrawl = new Spicrawl();
+try {
+  return await spicrawl.scrape({ url: "https://example.com/pricing", js_render: true });
+} catch (err) {
+  if (isSpicrawlError(err) && err.isReportable && err.requestId) {
+    await spicrawl.feedback({ requestId: err.requestId, intent: "read the pricing page for a comparison" });
+  }
+  throw err;
+}
+```
+
+- `rating` defaults to `"down"`. You can also pass `kind` (`broken`, `wrong_result`, `missing`, `confusing`, `other`), `impact` (`blocked`, `worked_around`, `friction`), `intent`, `comment` and `agent`.
+- A thumbs-down on a charged request refunds its credits, up to a daily cap. `refundCapReached` is true once the cap is hit.
+- Sending feedback again for the same request returns `alreadySubmitted: true` and records nothing new.
 
 ## Retries and timeouts
 
