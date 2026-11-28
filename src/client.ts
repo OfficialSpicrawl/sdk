@@ -165,6 +165,8 @@ export class Spicrawl {
    *
    * Not idempotent — each call performs and bills a new scrape, so it is retried only when the
    * server provably did no work (429, or a connection that never opened).
+   *
+   * For a request `body` to an API (JSON answer), use `scrapeRaw()` with `response_format: "html"`.
    */
   async scrape(params: ScrapeParams, opts?: RequestOptions): Promise<WithMeta<ScrapeEnvelope>> {
     const fmt = (params as { response_format?: string }).response_format;

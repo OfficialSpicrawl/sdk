@@ -3,6 +3,12 @@
 All notable changes to `@spicrawl/sdk` are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## 0.2.3 — 2026-11-28
+
+Fixed the request-body example.
+
+- **Fixed:** the request-body example used `scrape()`, which fails on JSON APIs (`ERR::EXTRACT::FAILED`). It now uses `scrapeRaw()` with `response_format: "html"`.
+
 ## 0.2.2 — 2026-11-28
 
 Report failed requests.

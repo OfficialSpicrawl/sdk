@@ -102,14 +102,17 @@ if (r.format === "text") console.log(r.body);
 
 Set `method` to `POST`, `PUT`, `PATCH` or `DELETE` and pass a `body`. A JSON object or array is sent as JSON. Plain fetch only: a body is refused with `js_render`, `stealth`, `session_id` and other browser options. The workspace must have request bodies enabled.
 
+An API usually answers JSON, so use `scrapeRaw()` with `response_format: "html"` to get its reply as sent. `scrape()` returns the page as markdown and fails on a non-HTML document with `ERR::EXTRACT::FAILED`.
+
 ```ts
-const result = await spicrawl.scrape({
+const res = await spicrawl.scrapeRaw({
   url: "https://api.example.com/v1/search",
   method: "POST",
   body: { query: "running shoes", limit: 10 },
   custom_headers: { Authorization: "Bearer <token>" },
+  response_format: "html",
 });
-console.log(result.status, result.content.slice(0, 200));
+console.log(res.targetStatus, JSON.parse(res.body));
 ```
 
 See https://docs.spicrawl.com/guides/post-requests.
