@@ -1754,7 +1754,7 @@ export interface components {
          *     whether it is retryable.
          * @enum {string}
          */
-        ErrorCode: "ERR::AUTH::MISSING_KEY" | "ERR::AUTH::INVALID_KEY" | "ERR::AUTH::REVOKED_KEY" | "ERR::AUTH::EXPIRED_KEY" | "ERR::AUTH::FORBIDDEN" | "ERR::AUTH::INSUFFICIENT_SCOPE" | "ERR::AUTH::INVALID_TOKEN" | "ERR::AUTH::INVALID_CREDENTIALS" | "ERR::AUTH::ENGINE_NOT_ENTITLED" | "ERR::REQUEST::INVALID" | "ERR::REQUEST::MISSING_PARAMETER" | "ERR::REQUEST::INVALID_PARAMETER" | "ERR::REQUEST::INCOMPATIBLE_FLAGS" | "ERR::REQUEST::NOT_FOUND" | "ERR::REQUEST::BEYOND_RETENTION" | "ERR::REQUEST::CONFLICT" | "ERR::REQUEST::PAYLOAD_TOO_LARGE" | "ERR::REQUEST::RETIRED" | "ERR::SECURITY::SSRF_BLOCKED" | "ERR::SECURITY::URL_BLOCKED" | "ERR::SECURITY::INVALID_URL" | "ERR::SESSION::NOT_FOUND" | "ERR::SESSION::EXPIRED" | "ERR::SESSION::RELEASED" | "ERR::SESSION::BUSY" | "ERR::SESSION::STATE_CORRUPT" | "ERR::LIMIT::RATE_LIMITED" | "ERR::LIMIT::CONCURRENCY_EXCEEDED" | "ERR::LIMIT::QUOTA_EXCEEDED" | "ERR::LIMIT::MAX_COST_EXCEEDED" | "ERR::LIMIT::SESSIONS_EXCEEDED" | "ERR::LIMIT::PARTNER_WORKSPACE_LIMIT" | "ERR::LIMIT::DAILY_LIMIT_EXCEEDED" | "ERR::UPSTREAM::TIMEOUT" | "ERR::UPSTREAM::DNS_FAILED" | "ERR::UPSTREAM::TLS_FAILED" | "ERR::UPSTREAM::CONNECTION_RESET" | "ERR::UPSTREAM::TOO_MANY_REDIRECTS" | "ERR::UPSTREAM::ERROR" | "ERR::UPSTREAM::CHALLENGE" | "ERR::PROXY::EXHAUSTED" | "ERR::PROXY::UNREACHABLE" | "ERR::PROXY::AUTH_FAILED" | "ERR::PROXY::RATE_LIMITED" | "ERR::ENGINE::RENDER_FAILED" | "ERR::ENGINE::UNAVAILABLE" | "ERR::EXTRACT::FAILED" | "ERR::EXTRACT::INVALID_RULES" | "ERR::INTERNAL::ERROR" | "ERR::INTERNAL::UNAVAILABLE";
+        ErrorCode: "ERR::AUTH::MISSING_KEY" | "ERR::AUTH::INVALID_KEY" | "ERR::AUTH::REVOKED_KEY" | "ERR::AUTH::EXPIRED_KEY" | "ERR::AUTH::FORBIDDEN" | "ERR::AUTH::INSUFFICIENT_SCOPE" | "ERR::AUTH::INVALID_TOKEN" | "ERR::AUTH::INVALID_CREDENTIALS" | "ERR::AUTH::ENGINE_NOT_ENTITLED" | "ERR::AUTH::BODY_NOT_ENABLED" | "ERR::AUTH::BODY_PAUSED" | "ERR::REQUEST::INVALID" | "ERR::REQUEST::MISSING_PARAMETER" | "ERR::REQUEST::INVALID_PARAMETER" | "ERR::REQUEST::INCOMPATIBLE_FLAGS" | "ERR::REQUEST::NOT_FOUND" | "ERR::REQUEST::BEYOND_RETENTION" | "ERR::REQUEST::CONFLICT" | "ERR::REQUEST::PAYLOAD_TOO_LARGE" | "ERR::REQUEST::BODY_NEEDS_METHOD" | "ERR::REQUEST::BODY_NEEDS_PLAIN_FETCH" | "ERR::REQUEST::BODY_TOO_LARGE" | "ERR::REQUEST::BODY_INVALID" | "ERR::REQUEST::BODY_REFUSED" | "ERR::REQUEST::RETIRED" | "ERR::SECURITY::SSRF_BLOCKED" | "ERR::SECURITY::URL_BLOCKED" | "ERR::SECURITY::INVALID_URL" | "ERR::SESSION::NOT_FOUND" | "ERR::SESSION::EXPIRED" | "ERR::SESSION::RELEASED" | "ERR::SESSION::BUSY" | "ERR::SESSION::STATE_CORRUPT" | "ERR::LIMIT::RATE_LIMITED" | "ERR::LIMIT::CONCURRENCY_EXCEEDED" | "ERR::LIMIT::QUOTA_EXCEEDED" | "ERR::LIMIT::MAX_COST_EXCEEDED" | "ERR::LIMIT::SESSIONS_EXCEEDED" | "ERR::LIMIT::PARTNER_WORKSPACE_LIMIT" | "ERR::LIMIT::BODY_RATE_LIMITED" | "ERR::LIMIT::DAILY_LIMIT_EXCEEDED" | "ERR::UPSTREAM::TIMEOUT" | "ERR::UPSTREAM::DNS_FAILED" | "ERR::UPSTREAM::TLS_FAILED" | "ERR::UPSTREAM::CONNECTION_RESET" | "ERR::UPSTREAM::TOO_MANY_REDIRECTS" | "ERR::UPSTREAM::ERROR" | "ERR::UPSTREAM::CHALLENGE" | "ERR::PROXY::EXHAUSTED" | "ERR::PROXY::UNREACHABLE" | "ERR::PROXY::AUTH_FAILED" | "ERR::PROXY::RATE_LIMITED" | "ERR::ENGINE::RENDER_FAILED" | "ERR::ENGINE::UNAVAILABLE" | "ERR::EXTRACT::FAILED" | "ERR::EXTRACT::INVALID_RULES" | "ERR::INTERNAL::ERROR" | "ERR::INTERNAL::UNAVAILABLE";
         /**
          * @description RFC 7807 error body, served as `application/problem+json`. Switch on `code`;
          *     retry only when `retryable` is true, after `retry_after_seconds`.
@@ -1792,6 +1792,10 @@ export interface components {
             /** @description Advice for the caller, not a problem. On a failed scrape, the same text as diagnostics.hint (also sent on X-Note). */
             notes?: string[];
             diagnostics?: components["schemas"]["ProblemDiagnostics"];
+            /** @description Where the platform can build one, the caller's request corrected (for example `method` added for a body, or `headers` renamed to `custom_headers`). It has the same shape as the request it corrects. Review it before resending; the platform never sends it for you. */
+            fix?: {
+                [key: string]: unknown;
+            };
         };
         /** @description Where the request failed and whether the platform, the proxy or the target was at fault. */
         ProblemDiagnostics: {
@@ -1859,6 +1863,12 @@ export interface components {
              * @enum {string}
              */
             method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+            /**
+             * @description Request body sent to the target, with `method` POST, PUT, PATCH or DELETE. A JSON object or array is sent as JSON, with `Content-Type: application/json` set unless `custom_headers` sets one. A string is sent as-is and needs a `Content-Type` of `application/json` or `application/x-www-form-urlencoded` in `custom_headers`, and must parse as that type (400 ERR::REQUEST::BODY_INVALID otherwise). Plain fetch only: refused with 400 ERR::REQUEST::BODY_NEEDS_PLAIN_FETCH alongside `js_render`, `stealth`, `mode`, `solve_captcha`, `actions`, screenshots, waits, `block_resources`, `response_format=pdf` or `session_id`. With `method` GET, HEAD, OPTIONS or none, refused with 400 ERR::REQUEST::BODY_NEEDS_METHOD. The encoded body is capped at 64 KiB (413 ERR::REQUEST::BODY_TOO_LARGE). Credential and payment fields and login, checkout or payment paths are refused with 400 ERR::REQUEST::BODY_REFUSED. Off unless enabled for the workspace (403 ERR::AUTH::BODY_NOT_ENABLED; contact support). Not accepted on batch items. Never cached or retried. Priced as a plain fetch (1 credit on the usual billable statuses, 0 on failure). See https://docs.spicrawl.com/guides/post-requests
+             */
+            body?: {
+                [key: string]: unknown;
+            } | unknown[] | string;
             /**
              * @description Run the page's JavaScript before capture (3 credits on datacenter or your own proxy; 25 on managed residential exits, coming soon). Required by every browser-only flag unless stealth or mode=auto is set; cannot be combined with mode=auto. If omitted, the project's stored default applies.
              * @default false

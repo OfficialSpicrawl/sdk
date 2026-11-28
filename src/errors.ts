@@ -17,6 +17,8 @@ export class SpicrawlError extends Error {
   /** From `Retry-After` or `retry_after_seconds`. */
   readonly retryAfterSeconds?: number;
   readonly diagnostics?: ProblemDiagnostics;
+  /** The request corrected by the platform, when it can build one (for example `method` added for a body). Review it before resending. */
+  readonly fix?: Record<string, unknown>;
   /** The target site's status when the failure came from the site. */
   readonly targetStatus?: number | null;
   /** Non-fatal decisions reported alongside the error. */
@@ -51,6 +53,7 @@ export class SpicrawlError extends Error {
     this.requestId = p.request_id ?? init.headers?.get("x-request-id") ?? undefined;
     this.retryAfterSeconds = init.retryAfterSeconds ?? p.retry_after_seconds;
     this.diagnostics = p.diagnostics;
+    this.fix = typeof p.fix === "object" && p.fix !== null ? (p.fix as Record<string, unknown>) : undefined;
     this.targetStatus = p.target_status;
     this.warnings = p.warnings;
     this.problem = init.problem;

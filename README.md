@@ -98,6 +98,22 @@ const r = await spicrawl.scrapeRaw({ url: "https://example.com", response_format
 if (r.format === "text") console.log(r.body);
 ```
 
+### Send a request body (POST)
+
+Set `method` to `POST`, `PUT`, `PATCH` or `DELETE` and pass a `body`. A JSON object or array is sent as JSON. Plain fetch only: a body is refused with `js_render`, `stealth`, `session_id` and other browser options. The workspace must have request bodies enabled.
+
+```ts
+const result = await spicrawl.scrape({
+  url: "https://api.example.com/v1/search",
+  method: "POST",
+  body: { query: "running shoes", limit: 10 },
+  custom_headers: { Authorization: "Bearer <token>" },
+});
+console.log(result.status, result.content.slice(0, 200));
+```
+
+See https://docs.spicrawl.com/guides/post-requests.
+
 ## Extract structured data from a web page
 
 Map field names to CSS selectors, or send a JSON Schema whose properties carry a `selector` to get typed, validated values:
@@ -354,7 +370,7 @@ Every error the SDK throws is a `SpicrawlError`. HTTP errors map to subclasses b
 | `APIConnectionError` | none (`status` 0) | DNS failure, refused or reset connection |
 | `APITimeoutError` | none (`status` 0) | `timeoutMs` exceeded; subclass of `APIConnectionError` |
 
-Each error carries `status`, `code` (a stable `ERR::FAMILY::NAME`), `retryable` (the server's verdict), `retryAfterSeconds`, `requestId`, `diagnostics.hint` and the raw `problem` body. `ERROR_CODES` lists all 49 documented codes.
+Each error carries `status`, `code` (a stable `ERR::FAMILY::NAME`), `retryable` (the server's verdict), `retryAfterSeconds`, `requestId`, `diagnostics.hint`, the raw `problem` body and `fix`: when the platform can build one, the corrected request (for example `method` added for a body). Review `fix` before you resend it; the SDK never resends it for you. `ERROR_CODES` lists all 57 documented codes.
 
 ```ts
 import { Spicrawl, RateLimitError, isSpicrawlError } from "@spicrawl/sdk";
