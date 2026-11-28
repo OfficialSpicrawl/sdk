@@ -55,6 +55,8 @@ tags:
 - name: Requests
   description: Inspect the history of requests made in this key's project, or with the `read` scope in
     every project of its organization.
+- name: Feedback
+  description: Report whether one of this key's requests worked. Free, no scope, no credits. Send it when a request failed or gave a wrong result, and when an error body carries `feedback_url`.
 - name: Usage
   description: Credits and volume over time. Requires the `read` scope.
 - name: Keys
@@ -138,6 +140,8 @@ components:
       - ERR::AUTH::INVALID_TOKEN
       - ERR::AUTH::INVALID_CREDENTIALS
       - ERR::AUTH::ENGINE_NOT_ENTITLED
+      - ERR::AUTH::BODY_NOT_ENABLED
+      - ERR::AUTH::BODY_PAUSED
       - ERR::REQUEST::INVALID
       - ERR::REQUEST::MISSING_PARAMETER
       - ERR::REQUEST::INVALID_PARAMETER
@@ -146,6 +150,11 @@ components:
       - ERR::REQUEST::BEYOND_RETENTION
       - ERR::REQUEST::CONFLICT
       - ERR::REQUEST::PAYLOAD_TOO_LARGE
+      - ERR::REQUEST::BODY_NEEDS_METHOD
+      - ERR::REQUEST::BODY_NEEDS_PLAIN_FETCH
+      - ERR::REQUEST::BODY_TOO_LARGE
+      - ERR::REQUEST::BODY_INVALID
+      - ERR::REQUEST::BODY_REFUSED
       - ERR::REQUEST::RETIRED
       - ERR::SECURITY::SSRF_BLOCKED
       - ERR::SECURITY::URL_BLOCKED
@@ -162,6 +171,7 @@ components:
       - ERR::LIMIT::SESSIONS_EXCEEDED
       - ERR::LIMIT::PARTNER_WORKSPACE_LIMIT
       - ERR::LIMIT::DAILY_LIMIT_EXCEEDED
+      - ERR::LIMIT::BODY_RATE_LIMITED
       - ERR::UPSTREAM::TIMEOUT
       - ERR::UPSTREAM::DNS_FAILED
       - ERR::UPSTREAM::TLS_FAILED
@@ -216,6 +226,14 @@ components:
           status: 403
           retryable: false
           title: The organization's plan does not include this engine
+        ERR::AUTH::BODY_NOT_ENABLED:
+          status: 403
+          retryable: false
+          title: Request bodies are not enabled for this workspace
+        ERR::AUTH::BODY_PAUSED:
+          status: 403
+          retryable: false
+          title: Request bodies are paused for this workspace
         ERR::REQUEST::INVALID:
           status: 400
           retryable: false
@@ -252,6 +270,26 @@ components:
           status: 400
           retryable: false
           title: The request needs a capability that is not available
+        ERR::REQUEST::BODY_NEEDS_METHOD:
+          status: 400
+          retryable: false
+          title: A request body needs a method that sends one
+        ERR::REQUEST::BODY_NEEDS_PLAIN_FETCH:
+          status: 400
+          retryable: false
+          title: A request body cannot be combined with browser options
+        ERR::REQUEST::BODY_TOO_LARGE:
+          status: 413
+          retryable: false
+          title: Request body is over 64 KiB
+        ERR::REQUEST::BODY_INVALID:
+          status: 400
+          retryable: false
+          title: Request body has no usable Content-Type or does not parse
+        ERR::REQUEST::BODY_REFUSED:
+          status: 400
+          retryable: false
+          title: Request body carries a refused field or path
         ERR::SECURITY::SSRF_BLOCKED:
           status: 400
           retryable: false
@@ -312,6 +350,10 @@ components:
           status: 429
           retryable: false
           title: Daily job search limit reached
+        ERR::LIMIT::BODY_RATE_LIMITED:
+          status: 429
+          retryable: true
+          title: Too many request body calls to one site
         ERR::UPSTREAM::TIMEOUT:
           status: 504
           retryable: true
@@ -381,6 +423,68 @@ components:
           status: 503
           retryable: true
           title: Service temporarily unavailable
+    FeedbackRequest:
+      type: object
+      required:
+      - request_id
+      - rating
+      properties:
+        request_id:
+          type: string
+          description: The request you are reporting on, from its `X-Request-Id` or the `request_id` of an error body. It must belong to this key's project, and be inside the retention window.
+          examples:
+          - 01M0FK1EP2E7FBMWAR7W10SMXW
+        rating:
+          type: string
+          enum:
+          - up
+          - down
+          description: '`up` if the result was right, `down` if it was not.'
+        kind:
+          type: string
+          enum:
+          - broken
+          - wrong_result
+          - missing
+          - confusing
+          - other
+          description: What kind of problem it was. Optional.
+        impact:
+          type: string
+          enum:
+          - blocked
+          - worked_around
+          - friction
+          description: How much it cost you. Optional.
+        intent:
+          type: string
+          maxLength: 300
+          description: What you were trying to do. Secrets (API keys, bearer tokens) are removed before storage.
+        comment:
+          type: string
+          maxLength: 4000
+          description: Free text. Secrets are removed before storage.
+        agent:
+          type: string
+          maxLength: 200
+          description: Which agent or app is reporting. Defaults to the User-Agent of the request reported on.
+        client:
+          type: object
+          description: Dashboard use only. Browser context, kept only when the User-Agent starts with `spicrawl-dashboard`; ignored otherwise. At most 4 KB as JSON.
+          additionalProperties: true
+    FeedbackResponse:
+      type: object
+      required:
+      - feedback_id
+      - already_submitted
+      properties:
+        feedback_id:
+          type: string
+          format: uuid
+          description: The id of the stored report.
+        already_submitted:
+          type: boolean
+          description: '`true` when this request already had a report from this source. The earlier report is kept; nothing new is stored.'
     Problem:
       type: object
       description: |
@@ -448,6 +552,14 @@ components:
             (also sent on X-Note).
         diagnostics:
           $ref: '#/components/schemas/ProblemDiagnostics'
+        feedback_url:
+          type: string
+          format: uri
+          description: Present on engine, upstream, proxy, extraction and internal failures when the platform has feedback enabled. `POST` a rating to this URL with `request_id` to report the failure. Absent on bad-parameter, auth, limit and not-found errors.
+        fix:
+          type: object
+          additionalProperties: true
+          description: Where the platform can build one, the caller's request corrected (for example `method` added for a body, or `headers` renamed to `custom_headers`). It has the same shape as the request it corrects. Review it before resending; the platform never sends it for you.
     ProblemDiagnostics:
       type: object
       description: Where the request failed and whether the platform, the proxy or the target was at fault.
@@ -566,9 +678,8 @@ components:
           - HEAD
           - OPTIONS
           default: GET
-          description: HTTP method sent to the target (case-insensitive). There is no request-body parameter,
-            so non-GET methods are sent without a body; only GET/HEAD/OPTIONS are retried on transient
-            failure and only GET results are cached.
+          description: HTTP method sent to the target (case-insensitive). POST, PUT, PATCH and DELETE can
+            carry a `body`. Only GET results are cached. GET, HEAD and OPTIONS may be retried; other methods are never retried.
         js_render:
           type: boolean
           default: false
@@ -760,6 +871,27 @@ components:
             Keep-Alive, Proxy-Authenticate, Proxy-Authorization, TE, Trailer, Transfer-Encoding, Upgrade,
             Host, Content-Length) are refused with 400 ERR::REQUEST::INVALID_PARAMETER. If omitted, the
             project's stored default applies.
+        body:
+          description: >-
+            Request body sent to the target, with `method` POST, PUT, PATCH or DELETE. A JSON object or
+            array is sent as JSON, with `Content-Type: application/json` set unless `custom_headers` sets
+            one. A string is sent as-is and needs a `Content-Type` of `application/json` or
+            `application/x-www-form-urlencoded` in `custom_headers`, and must parse as that type (400
+            ERR::REQUEST::BODY_INVALID otherwise). Plain fetch only: refused with 400
+            ERR::REQUEST::BODY_NEEDS_PLAIN_FETCH alongside `js_render`, `stealth`, `mode`, `solve_captcha`,
+            `actions`, screenshots, waits, `block_resources`, `response_format=pdf` or `session_id`. With
+            `method` GET, HEAD, OPTIONS or none, refused with 400 ERR::REQUEST::BODY_NEEDS_METHOD. The encoded
+            body is capped at 64 KiB (413 ERR::REQUEST::BODY_TOO_LARGE). Credential and payment fields and
+            login, checkout or payment paths are refused with 400 ERR::REQUEST::BODY_REFUSED. Off unless
+            enabled for the workspace (403 ERR::AUTH::BODY_NOT_ENABLED; contact support). Not accepted on
+            batch items. Never cached or retried. Priced as a plain fetch (1 credit on the usual billable
+            statuses, 0 on failure).
+          oneOf:
+          - type: object
+            additionalProperties: true
+          - type: array
+            items: {}
+          - type: string
         network_capture:
           allOf:
           - $ref: '#/components/schemas/NetworkCapture'
@@ -1635,12 +1767,22 @@ components:
           type: boolean
           default: false
           description: Also return a screenshot of the rendered page, as on /v1/scrape. Renders in full-browser mode and bills that tier.
+        pages:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 1
+          description: |
+            Read the start page and up to pages - 1 more pages from the site's sitemap (robots.txt Sitemap line, else /sitemap.xml;
+            the first child of a sitemap index), and merge them into one answer. Each page is one full-browser render; each sitemap
+            file is one plain fetch. Any other value is a 400.
     BrandResponse:
       type: object
       description: |
         Brand assets from one rendered page load. Sections not named in `include` are absent. Every URL is absolute.
         Links only: no asset bytes are returned, and video files are never returned as direct media URLs.
-      required: [url, final_url, warnings]
+        With `pages` above 1, the list sections are merged across the pages and each item carries `page`; `pages` lists each page read.
+      required: [url, final_url, warnings, hints]
       properties:
         url:
           type: string
@@ -1695,6 +1837,9 @@ components:
             type: object
             required: [url, svg, format, width, height, source, theme, score]
             properties:
+              page:
+                type: string
+                description: The URL of the page this item came from. Present only when `pages` is above 1.
               url:
                 type: string
                 nullable: true
@@ -1725,6 +1870,9 @@ components:
             type: object
             required: [url, rel, sizes, type]
             properties:
+              page:
+                type: string
+                description: The URL of the page this item came from. Present only when `pages` is above 1.
               url:
                 type: string
               rel:
@@ -1741,6 +1889,9 @@ components:
             type: object
             required: [hex, role, source, confidence]
             properties:
+              page:
+                type: string
+                description: The URL of the page this item came from. Present only when `pages` is above 1.
               hex:
                 type: string
                 pattern: '^#[0-9a-f]{6}$'
@@ -1760,6 +1911,9 @@ components:
             type: object
             required: [family, role, weights, source, files]
             properties:
+              page:
+                type: string
+                description: The URL of the page this item came from. Present only when `pages` is above 1.
               family:
                 type: string
               role:
@@ -1784,6 +1938,9 @@ components:
             type: object
             required: [url, alt, width, height, role]
             properties:
+              page:
+                type: string
+                description: The URL of the page this item came from. Present only when `pages` is above 1.
               url:
                 type: string
               alt:
@@ -1803,6 +1960,9 @@ components:
             type: object
             required: [provider, id, url, embed_url, poster]
             properties:
+              page:
+                type: string
+                description: The URL of the page this item came from. Present only when `pages` is above 1.
               provider:
                 type: string
                 enum: [youtube, vimeo, loom, wistia, other]
@@ -1823,6 +1983,9 @@ components:
             type: object
             required: [network, url]
             properties:
+              page:
+                type: string
+                description: The URL of the page this item came from. Present only when `pages` is above 1.
               network:
                 type: string
                 enum: [x, linkedin, github, instagram, youtube, facebook, tiktok, discord, threads, bluesky, mastodon, pinterest]
@@ -1838,9 +2001,29 @@ components:
           description: The rendering tier that served the page (X-Engine).
         warnings:
           type: array
-          description: Warnings from the page's brand script (a section that failed) and from the scrape envelope.
+          description: Warnings from the page's brand script (a section that failed) and from the scrape envelope. With `pages` above 1, every page's warnings.
           items:
             type: string
+        hints:
+          type: array
+          description: Short sentences on what to try next when a requested section came back empty, or when a multi-page request found no sitemap. Empty when there is nothing to say.
+          items:
+            type: string
+        pages:
+          type: array
+          description: Present only when `pages` is above 1. One entry per page read, the start page first.
+          items:
+            type: object
+            required: [url, status, credits]
+            properties:
+              url:
+                type: string
+              status:
+                type: string
+                description: '`ok`, or the error code of that page''s failure (for example ERR::ENGINE::RENDER_FAILED).'
+              credits:
+                type: integer
+                description: Credits charged for this page's render. Sitemap fetches are counted in the top-level credits only.
     ScrapeEnvelope:
       type: object
       required:
@@ -2004,7 +2187,7 @@ components:
         `response_format` (`html` by default, `markdown` or `text`). A field is either honoured on a batch item
         or refused at submission, never accepted and skipped. Refused with 400 INVALID_PARAMETER, naming every offending
         field, with nothing queued or charged: `actions`, `scroll_pages`, `sections` (when true), `screenshot` and its options, `network_capture`, `extract`,
-        `extract_preset`, `ai_extract`, `autoparse`, `links`, `session_id`, `cache`/`cache_ttl`, `original_status`,
+        `extract_preset`, `ai_extract`, `autoparse`, `links`, `session_id`, `body`, `cache`/`cache_ttl`, `original_status`,
         `allowed_status_codes`, `parse_pdf=true`, `mode=auto`, `response_format=pdf`, `response_format=json` when sent (the JSON envelope is /v1/scrape only), `solve_captcha`, and a non-GET `method` with
         `js_render` or `stealth`. A value that asks for nothing (`screenshot: false`, an empty list) is accepted. A
         refusal caused by a project default says so in `detail`. Use /v1/scrape for those fields.
@@ -5124,11 +5307,11 @@ components:
           items:
             type: string
             maxLength: 200
-          description: Site monitors only. Path patterns that drop a page. Applied after `include_paths`.
+          description: Site monitors only. Path patterns that drop a page. A page that matches one is dropped even when it matches `include_paths`. The start URL is exempt from both lists.
         max_credits_per_run:
           type: [integer, 'null']
           minimum: 1
-          description: Site monitors only. A run stops fetching when the next fetch would exceed this many credits. Null for no cap.
+          description: Site monitors only. A run stops fetching when the next fetch would exceed this many credits, discovery included. A fetch that costs more than expected can overrun it by about one fetch. Null for no cap.
         pages_tracked:
           type: [integer, 'null']
           minimum: 0
@@ -5310,7 +5493,7 @@ components:
         removed:
           type: integer
           minimum: 0
-          description: Pages no longer found, or that answered 404 or 410.
+          description: Pages that answered 404 or 410, or that are gone from the sitemaps. Absence from discovery counts only when every sitemap was read in full; links discovery never removes a page.
         credits:
           type: integer
           minimum: 0
@@ -6832,7 +7015,11 @@ paths:
 
         Use `include` to ask for only some sections. Only the sections you ask for appear in the response. Each section is capped (logos 10, icons 20, colors 12, fonts 10, images 50, videos 20, socials 20). A section that fails on the page is empty and named in `warnings`; the request still succeeds.
 
-        Billing: charged like a JavaScript-rendered scrape (`js_render=true`, 3 credits typically) with no surcharge. `screenshot=true` changes the rendering to full-browser and bills that tier instead. Failures cost 0. A cache hit is billed at the same price as the render that stored it, and the cache behaves as it does for `/v1/scrape`. Check `X-Credits-Charged`.
+        Use `pages` (1 to 5, default 1) to also read the top pages of the site's sitemap. The start page is always read; the other pages are chosen by path (about, brand, press, media, company, contact, team, pricing first), then by depth. The merged answer carries `pages` with each page's status and credits, and every item carries the `page` it came from. Latency grows with the pages read.
+
+        `hints` is always present: short sentences on what to try next when a requested section is empty.
+
+        Billing: priced as full-browser rendering, not as a JavaScript-rendered scrape, because the brand script runs as an `evaluate` action that only a full browser can run: 8 credits on a direct or datacenter exit, with no surcharge (32 on a residential or mobile exit). `screenshot=true` renders in full-browser mode at the same price. With `pages` above 1, each page is billed as one such render, and each sitemap file read is billed as a plain scrape. Failures cost 0. A cache hit is billed at the same price as the render that stored it, and the cache behaves as it does for `/v1/scrape`. Check `X-Credits-Charged`.
 
         Not idempotent: each call bills again, whether it renders the page or is served from cache.
       security:
@@ -6840,13 +7027,8 @@ paths:
       x-spicrawl-scope: scrape
       x-spicrawl-credits:
         unit: credits per successful request
-        basis: charged as a JavaScript-rendered scrape (js_render=true)
+        basis: charged as full-browser rendering (the brand script is an evaluate action, which only a full browser runs)
         matrix:
-          js_rendering:
-            direct: 3
-            datacenter: 3
-            residential: 25
-            mobile: 25
           full_browser_rendering:
             direct: 8
             datacenter: 8
@@ -6955,8 +7137,8 @@ paths:
                     socials:
                     - network: github
                       url: https://github.com/example
-                    credits: 3
-                    engine: js
+                    credits: 8
+                    engine: browser
                     warnings: []
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -8011,8 +8193,9 @@ paths:
 
         A site monitor (`scope: "site"`) needs `max_pages`. Each run discovers the site's pages from `robots.txt`,
         its sitemaps or the start page's links, fetches the changed ones and sends one `monitor.changed` digest for
-        the run. `confirm_checks` is ignored for site monitors. Each fetched page and each sitemap file costs a plain
-        scrape; a page skipped by its sitemap `lastmod` costs nothing. The Monitors section of the API reference has
+        the run. `confirm_checks` is ignored for site monitors. Each fetched page, each sitemap file and `robots.txt`
+        is a plain scrape call and is billed as one (a 404 is not charged); changing `selector` or `js_render` clears
+        the stored pages, so the next run is a new baseline; a page skipped by its sitemap `lastmod` costs nothing. The Monitors section of the API reference has
         the rules.
 
         Plan limits: the number of monitors and the minimum interval depend on the plan. See the Monitors section
@@ -9424,6 +9607,98 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /v1/feedback:
+    post:
+      tags:
+      - Feedback
+      operationId: feedbackCreate
+      summary: Report whether one request worked
+      description: |
+        Records a thumbs up or down on one of your own requests, keyed by the request id every response
+        carries. Agents should send one report per task, with `intent`, when a request failed or the result
+        was wrong. Nothing is charged for it, and it does not count toward credits.
+
+        Reports are kept with a copy of the request's log fields, so they outlive the request log. The
+        console groups repeat failures by error code, engine and host.
+
+        One report per request and source: a second report on the same request answers 200 with
+        `already_submitted: true`. A request that failed with a rate or quota limit (`ERR::LIMIT::*`) is
+        refused with 409, since the fault is the limit, not the target.
+
+        The route accepts any API key and needs no scope. Free text is stored after API keys and bearer
+        tokens are removed.
+      security:
+      - bearerAuth: []
+      x-spicrawl-scope: none
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+            examples:
+              broken:
+                summary: A page that failed to render
+                value:
+                  request_id: 01M0FK1EP2E7FBMWAR7W10SMXW
+                  rating: down
+                  kind: broken
+                  impact: blocked
+                  intent: Get the price table from the product page
+                  comment: Page rendered empty; content loads after a cookie banner
+                  agent: claude-code/2.1
+      responses:
+        '200':
+          description: A report from this source already exists for this request. Nothing new was stored.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+        '201':
+          description: The report was stored.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: '`ERR::REQUEST::NOT_FOUND`: no such request in this key''s project, or it has passed the retention window. Not retryable.'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: '`ERR::REQUEST::CONFLICT`: the request failed with a rate or quota limit (`ERR::LIMIT::*`). Feedback is not accepted for it. Not retryable.'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: '`ERR::LIMIT::RATE_LIMITED`: more than 100 reports in the current hour for this key. The `detail` says do not retry this report. Not retryable.'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /v1/usage:
     get:
       tags:
